@@ -41,7 +41,13 @@ from app.core.llm import check_ollama_health
 from app.core.stt import transcribe_audio_bytes
 from app.core.vision import analyze_image_bytes
 from app.core.web_search import search_web
-from app.core.document_registry import clear_document_registry, remove_documents
+from app.core.document_registry import (
+    clear_document_registry,
+    get_document,
+    list_documents,
+    remove_documents,
+    update_document,
+)
 from app.core.watcher import suppress_watcher_for
 from app.core.vectorstore import (
     get_vectorstore,
@@ -91,6 +97,147 @@ def _resolve_upload_target(filename: str, user_id: Optional[str]) -> Tuple[Path,
     target_dir.mkdir(parents=True, exist_ok=True)
 
     return target_dir / safe_filename, normalized_user_id, safe_filename
+
+
+def _coerce_department(value: Optional[str], fallback: Optional[str]) -> str:
+    raw = (value or fallback or "").strip()
+    return raw or "미지정"
+
+
+def _normalize_department(value: Optional[str]) -> Optional[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    safe = Path(raw).name.strip()
+    if not safe or safe in {".", ".."}:
+        return None
+    return safe.upper()
+
+
+def _coerce_access_level(value: Optional[str]) -> str:
+    raw = (value or "").strip()
+    return raw or "전체 공개"
+
+
+def _build_admin_document_payload(entry: dict) -> dict:
+    raw_source_path = str(entry.get("source_path") or "").strip()
+    source_path = Path(raw_source_path).expanduser() if raw_source_path else None
+    exists = bool(source_path and source_path.exists() and source_path.is_file())
+    stat = source_path.stat() if exists and source_path else None
+    status = "완료" if entry.get("status") == "ingested" else (entry.get("status") or "대기")
+
+    return {
+        "doc_id": entry.get("doc_id"),
+        "source": entry.get("source"),
+        "source_type": entry.get("source_type"),
+        "source_path": str(source_path) if source_path else "",
+        "file_exists": exists,
+        "file_size_bytes": stat.st_size if stat else None,
+        "uploaded_at": entry.get("uploaded_at") or entry.get("created_at"),
+        "created_at": entry.get("created_at"),
+        "updated_at": entry.get("updated_at"),
+        "page_total": entry.get("page_total"),
+        "chunk_count": entry.get("chunk_count", 0),
+        "status": status,
+        "status_raw": entry.get("status"),
+        "owner_id": entry.get("owner_id"),
+        "uploader_id": entry.get("uploader_id"),
+        "department": _coerce_department(entry.get("department"), entry.get("owner_id")),
+        "access_level": _coerce_access_level(entry.get("access_level")),
+        "department_only": bool(entry.get("department_only")),
+        "languages": entry.get("languages") or [],
+        "extractors_used": entry.get("extractors_used") or [],
+        "input_type": entry.get("input_type"),
+    }
+
+
+def _delete_managed_document(
+    source: Optional[str] = None,
+    doc_id: Optional[str] = None,
+    source_type: Optional[str] = None,
+    owner_id: Optional[str] = None,
+) -> dict:
+    if not source and not doc_id:
+        raise HTTPException(status_code=400, detail="source 또는 doc_id 중 하나는 필요합니다.")
+
+    normalized_owner_id = _normalize_user_id(owner_id)
+    source_candidates: List[Optional[str]] = []
+    if source:
+        source_candidates.append(source)
+        safe_source = Path(source).name
+        if safe_source and safe_source != source:
+            source_candidates.append(safe_source)
+
+    attempts: List[tuple[Optional[str], Optional[str], Optional[str]]] = []
+    seen = set()
+
+    def add_attempt(s: Optional[str], d: Optional[str], st: Optional[str]):
+        if not s and not d and not st:
+            return
+        key = (s or "", d or "", st or "")
+        if key in seen:
+            return
+        seen.add(key)
+        attempts.append((s, d, st))
+
+    source_types: List[Optional[str]] = [source_type] if source_type else ["upload", "library", None]
+
+    for s in source_candidates or [None]:
+        for st in source_types:
+            add_attempt(s, doc_id, st)
+
+    if doc_id:
+        for st in source_types:
+            add_attempt(None, doc_id, st)
+
+    deleted_chunks = 0
+    removed_registry = 0
+    exact_paths: List[Path] = []
+    if doc_id:
+        registry_doc = get_document(doc_id)
+        registry_source_path = str((registry_doc or {}).get("source_path") or "").strip()
+        if registry_source_path:
+            exact_paths.append(Path(registry_source_path))
+    for s, d, st in attempts:
+        scoped_owner_id = normalized_owner_id if st == "upload" else None
+        deleted_chunks += delete_documents(source=s, doc_id=d, source_type=st, owner_id=scoped_owner_id)
+        removed_registry += remove_documents(source=s, doc_id=d, source_type=st, owner_id=scoped_owner_id)
+
+    file_deleted = False
+    for exact_path in exact_paths:
+        if exact_path.exists() and exact_path.is_file():
+            exact_path.unlink()
+            file_deleted = True
+
+    candidate_dirs: List[Path] = [LIBRARY_DIR]
+    if normalized_owner_id:
+        candidate_dirs.append(UPLOADS_DIR / normalized_owner_id)
+    candidate_dirs.append(UPLOADS_DIR)
+
+    for s in source_candidates:
+        if not s:
+            continue
+        safe_name = Path(s).name
+        for base_dir in candidate_dirs:
+            file_path = base_dir / safe_name
+            if file_path.exists() and file_path.is_file():
+                file_path.unlink()
+                file_deleted = True
+
+    if deleted_chunks == 0 and removed_registry == 0 and not file_deleted:
+        raise HTTPException(status_code=404, detail="삭제할 문서를 찾지 못했습니다.")
+
+    return {
+        "message": "문서가 삭제되었습니다.",
+        "deleted_chunks": deleted_chunks,
+        "removed_registry": removed_registry,
+        "file_deleted": file_deleted,
+        "source": source,
+        "doc_id": doc_id,
+        "source_type": source_type,
+        "attempts": len(attempts),
+        "user_id": normalized_owner_id,
+    }
 
 
 # ── Root ───────────────────────────────────────────────────────────────
@@ -218,6 +365,8 @@ def chat(req: ChatRequest):
             system_prompt=req.system_prompt,
             web_search_enabled=req.web_search_enabled,
             user_id=req.user_id,
+            user_role=req.user_role,
+            department=req.department,
         )
 
         return ChatResponse(
@@ -343,8 +492,85 @@ def ingest(req: IngestRequest):
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 MAX_MULTI_UPLOAD_FILES = 90
 
+
+@router.post("/admin/upload")
+async def upload_department_document(
+    file: UploadFile = File(...),
+    admin_id: Optional[str] = Form(default=None),
+    department: str = Form(...),
+):
+    normalized_department = _normalize_department(department)
+    if not normalized_department:
+        raise HTTPException(status_code=400, detail="유효한 부서 코드가 필요합니다.")
+
+    safe_filename = Path(file.filename or "").name
+    if not safe_filename:
+        raise HTTPException(status_code=400, detail="유효한 파일명이 필요합니다.")
+
+    ext = Path(safe_filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {ext}. Allowed: {ALLOWED_EXTENSIONS}",
+        )
+
+    target_dir = LIBRARY_DIR / normalized_department
+    target_dir.mkdir(parents=True, exist_ok=True)
+    save_path = target_dir / safe_filename
+    normalized_admin_id = _normalize_user_id(admin_id)
+
+    try:
+        with open(save_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        suppress_watcher_for(save_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+    try:
+        result = await run_in_threadpool(
+            ingest_single_file,
+            save_path,
+            normalized_admin_id,
+            normalized_department,
+        )
+        if result.get("count", 0) == 0:
+            raise HTTPException(
+                status_code=422,
+                detail=result.get("message", "Could not extract text from file."),
+            )
+
+        if result.get("doc_id"):
+            update_document(
+                result["doc_id"],
+                {
+                    "department": normalized_department,
+                    "uploader_id": normalized_admin_id,
+                },
+            )
+
+        return {
+            "message": result["message"],
+            "filename": safe_filename,
+            "doc_id": result.get("doc_id"),
+            "department": normalized_department,
+            "chunks_stored": result.get("count", 0),
+            "source_type": result.get("source_type"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("admin upload failed")
+        raise HTTPException(status_code=500, detail=f"admin upload failed: {e}")
+
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...), user_id: Optional[str] = Form(default=None)):
+async def upload_file(
+    file: UploadFile = File(...),
+    user_id: Optional[str] = Form(default=None),
+    department: Optional[str] = Form(default=None),
+    access_level: Optional[str] = Form(default=None),
+    department_only: bool = Form(default=False),
+):
     """
     Upload a file, parse it, chunk it, and store it in the vectorstore.
 
@@ -385,12 +611,25 @@ async def upload_file(file: UploadFile = File(...), user_id: Optional[str] = For
                 detail=result.get("message", "Could not extract text from file."),
             )
 
+        if result.get("doc_id"):
+            update_document(
+                result["doc_id"],
+                {
+                    "department": _coerce_department(department, normalized_user_id),
+                    "access_level": _coerce_access_level(access_level),
+                    "department_only": bool(department_only),
+                },
+            )
+
         return {
             "message": result["message"],
             "filename": safe_filename,
             "chunks_stored": result["count"],
             "doc_id": result.get("doc_id"),
             "source_type": result.get("source_type"),
+            "department": _coerce_department(department, normalized_user_id),
+            "access_level": _coerce_access_level(access_level),
+            "department_only": bool(department_only),
             "timings": result.get("timings"),
         }
     except HTTPException:
@@ -401,7 +640,13 @@ async def upload_file(file: UploadFile = File(...), user_id: Optional[str] = For
 
 
 @router.post("/upload-multiple")
-async def upload_multiple_files(files: List[UploadFile] = File(...), user_id: Optional[str] = Form(default=None)):
+async def upload_multiple_files(
+    files: List[UploadFile] = File(...),
+    user_id: Optional[str] = Form(default=None),
+    department: Optional[str] = Form(default=None),
+    access_level: Optional[str] = Form(default=None),
+    department_only: bool = Form(default=False),
+):
     """Upload and ingest multiple files at once."""
     if len(files) > MAX_MULTI_UPLOAD_FILES:
         raise HTTPException(
@@ -425,6 +670,15 @@ async def upload_multiple_files(files: List[UploadFile] = File(...), user_id: Op
             suppress_watcher_for(save_path)
 
             result = await run_in_threadpool(ingest_single_file, save_path, normalized_user_id)
+            if result.get("doc_id"):
+                update_document(
+                    result["doc_id"],
+                    {
+                        "department": _coerce_department(department, normalized_user_id),
+                        "access_level": _coerce_access_level(access_level),
+                        "department_only": bool(department_only),
+                    },
+                )
             results.append({
                 "file": safe_filename,
                 "status": "success" if result["count"] > 0 else "failed",
@@ -432,6 +686,9 @@ async def upload_multiple_files(files: List[UploadFile] = File(...), user_id: Op
                 "message": result["message"],
                 "doc_id": result.get("doc_id"),
                 "source_type": result.get("source_type"),
+                "department": _coerce_department(department, normalized_user_id),
+                "access_level": _coerce_access_level(access_level),
+                "department_only": bool(department_only),
             })
         except Exception as e:
             results.append({"file": file.filename, "status": "error", "reason": str(e)})
@@ -456,6 +713,55 @@ def reset_db():
 
 
 # ── Document List ──────────────────────────────────────────────────────
+
+@router.get("/admin/documents")
+def admin_documents():
+    try:
+        documents = [_build_admin_document_payload(entry) for entry in list_documents()]
+        documents.sort(
+            key=lambda doc: (
+                str(doc.get("uploaded_at") or ""),
+                str(doc.get("updated_at") or ""),
+                str(doc.get("source") or ""),
+            ),
+            reverse=True,
+        )
+
+        departments = {}
+        access_levels = {}
+        alerts = []
+
+        for doc in documents:
+            department = doc["department"]
+            access_level = doc["access_level"]
+            departments[department] = departments.get(department, 0) + 1
+            access_levels[access_level] = access_levels.get(access_level, 0) + 1
+
+            if not doc["file_exists"]:
+                alerts.append({
+                    "level": "warning",
+                    "message": f"{doc['source']} 파일 경로를 찾지 못했습니다.",
+                    "doc_id": doc.get("doc_id"),
+                })
+
+        return {
+            "summary": {
+                "indexing_status": "실행 중",
+                "total_documents": len(documents),
+                "pending_count": sum(1 for doc in documents if doc.get("status") not in {"완료", "ingested"}),
+                "queue_count": 0,
+            },
+            "filters": {
+                "departments": [{"name": name, "count": count} for name, count in sorted(departments.items())],
+                "access_levels": [{"name": name, "count": count} for name, count in sorted(access_levels.items())],
+            },
+            "documents": documents,
+            "alerts": alerts[:8],
+        }
+    except Exception as e:
+        logger.exception("admin/documents failed")
+        raise HTTPException(status_code=500, detail=f"admin/documents failed: {e}")
+
 
 @router.get("/docs-list")
 def docs_list(user_id: Optional[str] = None):
@@ -499,82 +805,33 @@ def delete_upload_document(
     user_id: Optional[str] = None,
 ):
     """Delete one uploaded document from vectorstore/registry and remove local upload file."""
-    if not source and not doc_id:
-        raise HTTPException(status_code=400, detail="source 또는 doc_id 중 하나는 필요합니다.")
-
     try:
-        normalized_user_id = _normalize_user_id(user_id)
-        source_candidates: List[Optional[str]] = []
-        if source:
-            source_candidates.append(source)
-            safe_source = Path(source).name
-            if safe_source and safe_source != source:
-                source_candidates.append(safe_source)
-
-        attempts: List[tuple[Optional[str], Optional[str], Optional[str]]] = []
-        seen = set()
-
-        def add_attempt(s: Optional[str], d: Optional[str], st: Optional[str]):
-            if not s and not d and not st:
-                return
-            key = (s or "", d or "", st or "")
-            if key in seen:
-                return
-            seen.add(key)
-            attempts.append((s, d, st))
-
-        for s in source_candidates:
-            add_attempt(s, doc_id, "upload")
-        for s in source_candidates:
-            add_attempt(s, doc_id, None)
-
-        if doc_id:
-            add_attempt(None, doc_id, "upload")
-            add_attempt(None, doc_id, None)
-
-        for s in source_candidates:
-            add_attempt(s, None, "upload")
-            add_attempt(s, None, None)
-
-        deleted_chunks = 0
-        removed_registry = 0
-        for s, d, st in attempts:
-            deleted_chunks += delete_documents(source=s, doc_id=d, source_type=st, owner_id=normalized_user_id)
-            removed_registry += remove_documents(source=s, doc_id=d, source_type=st, owner_id=normalized_user_id)
-
-        file_deleted = False
-        candidate_dirs: List[Path] = []
-        if normalized_user_id:
-            candidate_dirs.append(UPLOADS_DIR / normalized_user_id)
-        candidate_dirs.append(UPLOADS_DIR)
-
-        for s in source_candidates:
-            if not s:
-                continue
-            safe_name = Path(s).name
-            for base_dir in candidate_dirs:
-                upload_path = base_dir / safe_name
-                if upload_path.exists() and upload_path.is_file():
-                    upload_path.unlink()
-                    file_deleted = True
-
-        if deleted_chunks == 0 and removed_registry == 0 and not file_deleted:
-            raise HTTPException(status_code=404, detail="삭제할 업로드 문서를 찾지 못했습니다.")
-
-        return {
-            "message": "업로드 파일이 삭제되었습니다.",
-            "deleted_chunks": deleted_chunks,
-            "removed_registry": removed_registry,
-            "file_deleted": file_deleted,
-            "source": source,
-            "doc_id": doc_id,
-            "attempts": len(attempts),
-            "user_id": normalized_user_id,
-        }
+        result = _delete_managed_document(
+            source=source,
+            doc_id=doc_id,
+            source_type="upload",
+            owner_id=user_id,
+        )
+        result["message"] = "업로드 파일이 삭제되었습니다."
+        return result
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"upload-document delete failed: {e}")
+
+
+@router.delete("/admin/document")
+def delete_admin_document(
+    source: Optional[str] = None,
+    doc_id: Optional[str] = None,
+    source_type: Optional[str] = None,
+):
+    try:
+        return _delete_managed_document(source=source, doc_id=doc_id, source_type=source_type)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"admin/document delete failed: {e}")
 
 
 # ── Keyword Count ──────────────────────────────────────────────────────

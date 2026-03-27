@@ -691,6 +691,8 @@ def handle_chat(
     system_prompt: str = None,
     web_search_enabled: bool = True,
     user_id: str = None,
+    user_role: str = None,
+    department: str = None,
 ) -> Dict[str, Any]:
     """
     Unified chat handler — works like a normal chatbot.
@@ -707,6 +709,8 @@ def handle_chat(
     """
     history = history or []
     selected_model = model or OLLAMA_MODEL
+    normalized_role = (user_role or "").strip()
+    normalized_department = (department or "").strip() or None
     scoped_source = None if _is_smalltalk_query(user_message) else active_source
     scoped_doc_id = None if _is_smalltalk_query(user_message) else active_doc_id
     scoped_source_type = None if _is_smalltalk_query(user_message) else active_source_type
@@ -784,12 +788,17 @@ def handle_chat(
             or _should_force_small_doc_full_context(scoped_source, scoped_doc_id)
         )
     )
+    department_scope = None
+    if normalized_role == "직원" and normalized_department and not (scoped_source or scoped_doc_id or scoped_source_type == "upload"):
+        department_scope = normalized_department
+
     retrieval = retrieve(
         user_message,
         source_filter=scoped_source,
         doc_id_filter=scoped_doc_id,
         source_type_filter=scoped_source_type,
         owner_id_filter=user_id,
+        department_filter=department_scope,
         full_document=use_full_document,
     )
     docs = retrieval.docs

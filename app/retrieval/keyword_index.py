@@ -123,6 +123,7 @@ class InMemoryBM25Index:
         doc_id_filter: Optional[str] = None,
         source_type_filter: Optional[str] = None,
         owner_id_filter: Optional[str] = None,
+        department_filter: Optional[str] = None,
     ) -> List[Tuple[Document, float]]:
         query_tokens = tokenize_text(query)
         if not query_tokens or not self._documents:
@@ -139,6 +140,8 @@ class InMemoryBM25Index:
             if source_type_filter and doc.metadata.get("source_type") != source_type_filter:
                 continue
             if owner_id_filter and doc.metadata.get("source_type") == "upload" and doc.metadata.get("owner_id") != owner_id_filter:
+                continue
+            if department_filter and doc.metadata.get("department") != department_filter:
                 continue
             if not doc_tokens:
                 continue
@@ -191,6 +194,7 @@ def search_keyword_index(
     doc_id_filter: Optional[str] = None,
     source_type_filter: Optional[str] = None,
     owner_id_filter: Optional[str] = None,
+    department_filter: Optional[str] = None,
 ) -> List[Tuple[Document, float]]:
     return _keyword_index.search(
         query=query,
@@ -199,4 +203,5 @@ def search_keyword_index(
         doc_id_filter=doc_id_filter,
         source_type_filter=source_type_filter,
         owner_id_filter=owner_id_filter,
+        department_filter=department_filter,
     )

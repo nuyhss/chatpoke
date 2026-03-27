@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>문서 관리 관리자</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg:#f4f7fb; --surface:#fff; --line:#dbe3ee; --text:#0f172a; --muted:#64748b; --blue:#2563eb; --green:#16a34a; --red:#ef4444; --shadow:0 18px 48px rgba(15,23,42,.08); --radius:24px; }
+        * { box-sizing:border-box; }
+        html, body { margin:0; min-height:100%; }
+        body { font-family:"IBM Plex Sans KR",sans-serif; background:linear-gradient(180deg,#f8fbff 0%,var(--bg) 100%); color:var(--text); }
+        button, input, select { font:inherit; }
+        .app-shell { min-height:100vh; padding:20px; }
+        .panel, .topbar, .status-strip, .table-shell, .modal-card, .login-card { background:rgba(255,255,255,.95); border:1px solid var(--line); box-shadow:var(--shadow); }
+        .topbar { border-radius:var(--radius); padding:22px 26px; display:grid; grid-template-columns:1.2fr 1fr; gap:18px; align-items:center; }
+        .title-wrap { display:flex; align-items:center; gap:14px; min-width:0; }
+        .title-icon { width:50px; height:50px; border-radius:16px; background:linear-gradient(135deg,#1d4ed8,#60a5fa); color:#fff; display:grid; place-items:center; font-size:24px; flex-shrink:0; }
+        .title-copy h1 { margin:0; font-size:34px; line-height:1.1; letter-spacing:-.03em; }
+        .title-copy p { margin:6px 0 0; color:var(--muted); font-size:15px; }
+        .toolbar { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:12px; }
+        .search-input, .field input, .field select { width:100%; padding:14px 16px; border:1px solid var(--line); border-radius:16px; background:#fff; color:var(--text); outline:none; }
+        .search-input { min-width:280px; flex:1 1 280px; }
+        .btn { border:1px solid var(--line); background:#fff; color:var(--text); border-radius:16px; padding:13px 18px; cursor:pointer; white-space:nowrap; }
+        .btn.primary { background:linear-gradient(135deg,#2563eb,#3b82f6); color:#fff; border-color:transparent; }
+        .btn.subtle { background:#f8fafc; }
+        .btn.danger { color:var(--red); border-color:#fca5a5; background:#fff5f5; }
+        .btn:disabled { opacity:.6; cursor:not-allowed; }
+        .status-strip { margin-top:16px; border-radius:20px; padding:16px 22px; display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; align-items:center; }
+        .status-left, .status-right { display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
+        .status-pill { display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-weight:500; }
+        .status-pill strong { color:var(--text); font-size:17px; }
+        .status-dot { width:10px; height:10px; border-radius:999px; background:var(--green); }
+        .content-grid { margin-top:18px; display:grid; grid-template-columns:290px minmax(0,1fr) 300px; gap:18px; align-items:start; }
+        .panel { border-radius:24px; overflow:hidden; }
+        .panel-head { padding:22px 22px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .panel-head h2, .panel-head h3 { margin:0; font-size:17px; }
+        .panel-body { padding:18px; }
+        .filter-group + .filter-group { border-top:1px solid var(--line); }
+        .filter-list { display:flex; flex-direction:column; gap:10px; }
+        .filter-item { border:1px solid transparent; background:#fff; border-radius:16px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:10px; cursor:pointer; }
+        .filter-item.active { background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff; }
+        .count-badge { display:inline-flex; min-width:34px; justify-content:center; align-items:center; padding:4px 10px; border-radius:999px; background:#eef2ff; color:#1d4ed8; font-weight:700; font-size:13px; }
+        .main-stack { display:grid; gap:18px; }
+        .upload-card { border:1px dashed #c7d2fe; border-radius:24px; background:linear-gradient(180deg,#fbfdff,#f8fbff); padding:20px; }
+        .upload-settings { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-bottom:18px; }
+        .field { min-width:160px; flex:0 1 180px; }
+        .field label { display:block; margin-bottom:8px; font-size:13px; color:var(--muted); font-weight:600; }
+        .checkbox-row { display:flex; align-items:center; gap:10px; padding:14px 2px; color:var(--muted); font-weight:500; }
+        .dropzone { border:2px dashed #dbe3ee; background:#fff; border-radius:22px; min-height:220px; display:grid; place-items:center; text-align:center; padding:28px; }
+        .dropzone.dragover { border-color:#60a5fa; background:#f8fbff; }
+        .dropzone .file-icon { font-size:42px; margin-bottom:12px; }
+        .dropzone h3 { margin:0 0 8px; font-size:24px; }
+        .dropzone p { margin:0; color:var(--muted); line-height:1.6; }
+        .support-note { margin-top:10px; color:var(--muted); font-size:13px; }
+        .table-shell { border-radius:24px; overflow:hidden; }
+        .table-toolbar { padding:18px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; }
+        .selection-meta { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:14px; }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; min-width:860px; }
+        th, td { padding:16px 14px; border-bottom:1px solid #edf2f7; text-align:left; vertical-align:middle; }
+        th { color:var(--muted); font-size:13px; background:#fbfcfe; font-weight:700; }
+        td { font-size:14px; }
+        .doc-name { display:flex; align-items:center; gap:10px; min-width:0; }
+        .doc-title { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:360px; }
+        .status-badge, .access-badge { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:6px 10px; font-size:12px; font-weight:700; }
+        .status-badge.complete { color:#16a34a; background:#dcfce7; }
+        .status-badge.missing { color:#d97706; background:#fef3c7; }
+        .access-badge { color:#1d4ed8; background:#dbeafe; }
+        .row-actions { display:flex; gap:8px; justify-content:flex-end; }
+        .mini-btn { border:1px solid var(--line); background:#fff; color:var(--muted); border-radius:12px; padding:8px 10px; cursor:pointer; }
+        .empty-state { padding:54px 20px; text-align:center; color:var(--muted); }
+        .alerts-list, .accounts-list { display:grid; gap:12px; }
+        .alert-item, .account-row { border:1px solid var(--line); border-radius:18px; background:#fff; padding:14px 16px; }
+        .alert-item.warning { border-color:#fde68a; background:#fffdf3; }
+        .alert-item.success { border-color:#bbf7d0; background:#f7fff9; }
+        .alert-item.error { border-color:#fecaca; background:#fff7f7; }
+        .alert-meta, .account-meta, .muted-text { color:var(--muted); font-size:13px; }
+        .upload-progress { display:none; margin-top:14px; border:1px solid var(--line); border-radius:18px; background:#fff; padding:14px 16px; }
+        .upload-progress.visible { display:block; }
+        .progress-head { display:flex; justify-content:space-between; gap:12px; font-size:14px; color:var(--muted); }
+        .progress-bar { margin-top:10px; height:10px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
+        .progress-fill { height:100%; width:0%; background:linear-gradient(90deg,#2563eb,#60a5fa); }
+        .modal-bg { position:fixed; inset:0; background:rgba(15,23,42,.42); display:none; align-items:center; justify-content:center; padding:24px; z-index:100; }
+        .modal-bg.open { display:flex; }
+        .modal-card { width:min(720px,100%); border-radius:26px; padding:24px; }
+        .modal-card.small { width:min(480px,100%); }
+        .modal-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:18px; }
+        .modal-head h3 { margin:0; font-size:22px; }
+        .modal-close { border:none; background:transparent; color:var(--muted); font-size:28px; cursor:pointer; }
+        .modal-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+        .modal-actions { margin-top:20px; display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
+        .account-row { display:flex; justify-content:space-between; gap:16px; align-items:center; }
+        .account-name { font-weight:700; margin-bottom:4px; }
+        .account-actions { display:flex; gap:8px; }
+        .login-screen { position:fixed; inset:0; background:linear-gradient(180deg,#f5f9ff 0%,#edf3fb 100%); display:grid; place-items:center; z-index:200; padding:20px; }
+        .login-card { width:min(460px,100%); border-radius:30px; padding:34px; }
+        .login-card h1 { margin:14px 0 6px; font-size:34px; line-height:1.1; }
+        .login-card p { margin:0 0 26px; color:var(--muted); line-height:1.6; }
+        .login-stack { display:grid; gap:14px; }
+        .login-type-row { display:flex; gap:8px; margin-bottom:14px; }
+        .login-type-btn { flex:1; padding:12px 14px; border:1px solid var(--line); border-radius:14px; background:#f8fafc; color:var(--muted); cursor:pointer; }
+        .login-type-btn.active { background:#eff6ff; border-color:#93c5fd; color:#1d4ed8; font-weight:700; }
+        .error-text { color:var(--red); font-size:13px; margin-top:12px; display:none; }
+        @media (max-width:1360px) { .content-grid { grid-template-columns:280px minmax(0,1fr); } .right-panel { grid-column:1 / -1; } }
+        @media (max-width:980px) { .topbar { grid-template-columns:1fr; } .content-grid, .modal-grid { grid-template-columns:1fr; } }
+    </style>
+</head>
+<body>
+    <div class="login-screen" id="login-screen">
+        <div class="login-card">
+            <div class="title-icon">🗂</div>
+            <h1>통합 로그인</h1>
+            <p id="login-help">로그인 유형을 선택한 뒤 직원 채팅 또는 관리자 문서 관리로 이동하세요.</p>
+            <div class="login-type-row">
+                <button class="login-type-btn" id="login-type-employee" type="button">직원 로그인</button>
+                <button class="login-type-btn active" id="login-type-admin" type="button">관리자 로그인</button>
+            </div>
+            <div class="login-stack">
+                <div class="field"><label for="login-id">아이디</label><input id="login-id" type="text" autocomplete="username" placeholder="예: admin 또는 rd"></div>
+                <div class="field"><label for="login-pw">비밀번호</label><input id="login-pw" type="password" autocomplete="current-password" placeholder="예: admin123 또는 123qwe"></div>
+                <button class="btn primary" id="login-btn" type="button">로그인</button>
+            </div>
+            <div class="error-text" id="login-error">관리자 계정만 접속할 수 있습니다.</div>
+            <div class="muted-text" style="margin-top:14px;">예시 계정: <strong>admin / admin123</strong>, <strong>rd / 123qwe</strong>, <strong>md / 123qwe</strong>, <strong>od / 123qwe</strong></div>
+        </div>
+    </div>
+
+    <div class="app-shell" id="app-shell" style="display:none;">
+        <section class="topbar">
+            <div class="title-wrap">
+                <div class="title-icon">🗂</div>
+                <div class="title-copy">
+                    <h1>문서 관리</h1>
+                    <p>업로드 문서의 부서, 접근 권한, 상태를 한 번에 관리합니다.</p>
+                </div>
+            </div>
+            <div class="toolbar">
+                <input id="search-input" class="search-input" type="search" placeholder="파일명 검색...">
+                <button class="btn primary" id="toolbar-upload-btn" type="button">📤 파일 업로드</button>
+                <button class="btn" id="go-chat-btn" type="button">💬 채팅으로</button>
+            </div>
+        </section>
+
+        <section class="status-strip">
+            <div class="status-left">
+                <div class="status-pill"><span class="status-dot"></span><span id="summary-status">인덱서 실행 중</span></div>
+                <div class="status-pill">총 문서 <strong id="summary-total">0</strong></div>
+                <div class="status-pill">대기 <strong id="summary-pending">0</strong></div>
+                <div class="status-pill">큐 <strong id="summary-queue">0</strong></div>
+            </div>
+            <div class="status-right">
+                <span id="current-user-chip">admin</span>
+                <button class="btn subtle" id="change-password-btn" type="button">비밀번호 변경</button>
+                <button class="btn subtle" id="manage-accounts-btn" type="button">계정 관리</button>
+                <button class="btn danger" id="logout-btn" type="button">로그아웃</button>
+            </div>
+        </section>
+
+        <section class="content-grid">
+            <aside class="panel">
+                <div class="filter-group">
+                    <div class="panel-head"><h2>부서 필터</h2></div>
+                    <div class="panel-body"><div class="filter-list" id="department-filters"></div></div>
+                </div>
+                <div class="filter-group">
+                    <div class="panel-head"><h2>부서 그룹</h2></div>
+                    <div class="panel-body"><div class="filter-list" id="access-filters"></div></div>
+                </div>
+            </aside>
+
+            <main class="main-stack">
+                <section class="upload-card">
+                    <div class="upload-settings">
+                        <div class="field"><label for="department-input">업로드 대상 부서</label><select id="department-input"><option value="RD">RD</option><option value="MD">MD</option><option value="OD">OD</option></select></div>
+                        <label class="checkbox-row"><span>관리자가 선택한 부서 문서로 직원 답변 범위를 제한합니다.</span></label>
+                    </div>
+                    <div class="dropzone" id="dropzone" tabindex="0">
+                        <div>
+                            <div class="file-icon">📄</div>
+                            <h3>파일을 드래그하거나 클릭해 업로드하세요</h3>
+                            <p>관리자 페이지에서 업로드된 문서는 표와 필터에 바로 반영됩니다.</p>
+                            <div class="support-note">현재 연결된 백엔드 지원 형식: PDF, PNG, JPG, JPEG, WEBP</div>
+                        </div>
+                    </div>
+                    <div class="upload-progress" id="upload-progress">
+                        <div class="progress-head"><span id="progress-label">업로드 준비 중</span><span id="progress-ratio">0 / 0</span></div>
+                        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                    </div>
+                    <input id="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp" style="display:none;">
+                </section>
+
+                <section class="table-shell">
+                    <div class="table-toolbar">
+                        <div class="selection-meta">
+                            <label><input id="select-all" type="checkbox"> 전체 선택</label>
+                            <span id="selection-count">선택 0건</span>
+                            <span id="result-count">표시 0건</span>
+                        </div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <button class="btn subtle" id="refresh-btn" type="button">새로고침</button>
+                            <button class="btn danger" id="delete-selected-btn" type="button">선택 삭제</button>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th></th><th>파일명</th><th>부서</th><th>크기</th><th>등록일</th><th>공유 그룹</th><th>상태</th><th></th></tr></thead>
+                            <tbody id="documents-body"></tbody>
+                        </table>
+                        <div class="empty-state" id="documents-empty" style="display:none;">조건에 맞는 문서가 없습니다.</div>
+                    </div>
+                </section>
+            </main>
+
+            <aside class="panel right-panel">
+                <div class="panel-head"><h3>알림</h3></div>
+                <div class="panel-body"><div class="alerts-list" id="alerts-list"></div></div>
+            </aside>
+        </section>
+    </div>
+
+    <div class="modal-bg" id="password-modal">
+        <div class="modal-card small">
+            <div class="modal-head"><h3>비밀번호 변경</h3><button class="modal-close" type="button" data-close="password-modal">&times;</button></div>
+            <div class="modal-grid">
+                <div class="field" style="grid-column:1/-1;"><label for="current-password-input">현재 비밀번호</label><input id="current-password-input" type="password"></div>
+                <div class="field" style="grid-column:1/-1;"><label for="new-password-input">새 비밀번호</label><input id="new-password-input" type="password"></div>
+                <div class="field" style="grid-column:1/-1;"><label for="confirm-password-input">새 비밀번호 확인</label><input id="confirm-password-input" type="password"></div>
+            </div>
+            <div class="modal-actions"><button class="btn" type="button" data-close="password-modal">취소</button><button class="btn primary" id="save-password-btn" type="button">저장</button></div>
+        </div>
+    </div>
+
+    <div class="modal-bg" id="accounts-modal">
+        <div class="modal-card">
+            <div class="modal-head"><h3>계정 관리</h3><button class="modal-close" type="button" data-close="accounts-modal">&times;</button></div>
+            <div class="accounts-list" id="accounts-list"></div>
+            <div class="modal-grid">
+                <div class="field"><label for="new-account-id">아이디</label><input id="new-account-id" type="text" placeholder="예: rd-team1"></div>
+                <div class="field"><label for="new-account-pw">비밀번호</label><input id="new-account-pw" type="password" placeholder="예: 123qwe"></div>
+                <div class="field"><label for="new-account-role">계정 유형</label><select id="new-account-role"><option>직원</option><option>관리자</option></select></div>
+                <div class="field"><label for="new-account-department">부서</label><select id="new-account-department"><option value="RD">RD</option><option value="MD">MD</option><option value="OD">OD</option><option value="ALL">ALL</option></select></div>
+            </div>
+            <div class="modal-actions"><button class="btn" type="button" data-close="accounts-modal">닫기</button><button class="btn primary" id="add-account-btn" type="button">계정 추가</button></div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin;
+        const USERS_KEY = "ai_users";
+        const ALERTS_KEY = "admin_ui_alerts";
+        const CROSS_LOGIN_KEY = "ai_cross_login";
+        const DEFAULT_USERS = {
+            admin: { pw: "admin123", role: "관리자", department: "ALL" },
+            rd: { pw: "123qwe", role: "직원", department: "RD" },
+            md: { pw: "123qwe", role: "직원", department: "MD" },
+            od: { pw: "123qwe", role: "직원", department: "OD" }
+        };
+        const ACCESS_ORDER = ["RD", "MD", "OD"];
+        const DEPT_ALL = "__all__";
+        const DEPT_MINE = "__mine__";
+
+        let currentUser = null;
+        let allDocuments = [];
+        let selectedKeys = new Set();
+        let activeDepartmentFilter = DEPT_ALL;
+        let activeAccessFilter = "전체";
+        let serverAlerts = [];
+        let clientAlerts = loadAlerts();
+        let loginType = "admin";
+
+        function esc(text) {
+            return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        function mergeDefaultUsers(raw) {
+            const users = { ...DEFAULT_USERS };
+            Object.entries(raw || {}).forEach(([id, info]) => {
+                users[id] = {
+                    pw: info?.pw || "",
+                    role: info?.role || "직원",
+                    department: info?.department || (id === "admin" ? "ALL" : "RD")
+                };
+            });
+            return users;
+        }
+
+        function getUsers() {
+            const users = mergeDefaultUsers(JSON.parse(localStorage.getItem(USERS_KEY) || "null") || {});
+            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+            return users;
+        }
+
+        function saveUsers(users) {
+            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        }
+
+        function loadAlerts() {
+            const raw = JSON.parse(localStorage.getItem(ALERTS_KEY) || "[]");
+            return Array.isArray(raw) ? raw : [];
+        }
+
+        function saveAlerts() {
+            localStorage.setItem(ALERTS_KEY, JSON.stringify(clientAlerts.slice(0, 30)));
+        }
+
+        function queueCrossLogin(id, role, department, target) {
+            localStorage.setItem(CROSS_LOGIN_KEY, JSON.stringify({
+                id,
+                role,
+                department,
+                target,
+                ts: Date.now()
+            }));
+        }
+
+        function consumeCrossLogin(target) {
+            try {
+                const raw = JSON.parse(localStorage.getItem(CROSS_LOGIN_KEY) || "null");
+                if (!raw || raw.target !== target) return null;
+                if (Date.now() - Number(raw.ts || 0) > 2 * 60 * 1000) {
+                    localStorage.removeItem(CROSS_LOGIN_KEY);
+                    return null;
+                }
+                localStorage.removeItem(CROSS_LOGIN_KEY);
+                return raw;
+            } catch {
+                localStorage.removeItem(CROSS_LOGIN_KEY);
+                return null;
+            }
+        }
+
+        function setLoginType(type) {
+            loginType = type === "employee" ? "employee" : "admin";
+            document.getElementById("login-type-employee").classList.toggle("active", loginType === "employee");
+            document.getElementById("login-type-admin").classList.toggle("active", loginType === "admin");
+            document.getElementById("login-help").textContent = loginType === "admin"
+                ? "관리자 계정으로 로그인하면 부서별 문서 업로드와 관리를 진행합니다."
+                : "직원 계정으로 로그인하면 채팅 화면으로 이동합니다.";
+            document.getElementById("login-error").style.display = "none";
+            document.getElementById("login-error").textContent = "아이디 또는 비밀번호가 올바르지 않습니다.";
+        }
+
+        function pushAlert(level, message) {
+            clientAlerts.unshift({ level, message, created_at: new Date().toISOString() });
+            clientAlerts = clientAlerts.slice(0, 30);
+            saveAlerts();
+            renderAlerts();
+        }
+
+        function openModal(id) { document.getElementById(id).classList.add("open"); }
+        function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+        function formatBytes(bytes) {
+            if (!bytes && bytes !== 0) return "-";
+            const units = ["B", "KB", "MB", "GB"];
+            let value = Number(bytes);
+            let idx = 0;
+            while (value >= 1024 && idx < units.length - 1) {
+                value /= 1024;
+                idx += 1;
+            }
+            return `${value >= 100 || idx === 0 ? Math.round(value) : value.toFixed(1)} ${units[idx]}`;
+        }
+
+        function formatDate(value) {
+            if (!value) return "-";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return "-";
+            return date.toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+        }
+
+        function docKey(doc) {
+            return doc.doc_id ? `id:${doc.doc_id}` : `src:${String(doc.source || "").toLowerCase()}`;
+        }
+
+        function isMine(doc) {
+            if (!currentUser) return false;
+            return doc.uploader_id === currentUser.id || doc.owner_id === currentUser.id;
+        }
+
+        function filteredDocuments() {
+            const query = document.getElementById("search-input").value.trim().toLowerCase();
+            return allDocuments.filter(doc => {
+                const queryMatch = !query || String(doc.source || "").toLowerCase().includes(query);
+                const deptMatch = activeDepartmentFilter === DEPT_ALL || (activeDepartmentFilter === DEPT_MINE ? isMine(doc) : doc.department === activeDepartmentFilter);
+                const accessMatch = activeAccessFilter === "전체" || String(doc.department || "미지정") === activeAccessFilter;
+                return queryMatch && deptMatch && accessMatch;
+            });
+        }
+
+        function renderSummary(summary) {
+            document.getElementById("summary-status").textContent = summary?.indexing_status ? `인덱서 ${summary.indexing_status}` : "인덱서 실행 중";
+            document.getElementById("summary-total").textContent = summary?.total_documents ?? 0;
+            document.getElementById("summary-pending").textContent = summary?.pending_count ?? 0;
+            document.getElementById("summary-queue").textContent = summary?.queue_count ?? 0;
+        }
+
+        function buildDepartmentItems() {
+            return [
+                { key: DEPT_ALL, label: "전체 문서", count: allDocuments.length },
+                { key: DEPT_MINE, label: "내 문서", count: allDocuments.filter(isMine).length }
+            ];
+        }
+
+        function buildAccessItems() {
+            const counts = {};
+            allDocuments.forEach(doc => { counts[doc.department || "미지정"] = (counts[doc.department || "미지정"] || 0) + 1; });
+            const items = [{ key: "전체", label: "전체", count: allDocuments.length }];
+            ACCESS_ORDER.forEach(name => { if (counts[name]) items.push({ key: name, label: name, count: counts[name] }); });
+            return items;
+        }
+
+        function renderFilterList(containerId, items, activeKey, setter) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = items.map(item => `
+                <button class="filter-item${item.key === activeKey ? " active" : ""}" type="button" data-filter-key="${encodeURIComponent(item.key)}">
+                    <span>${esc(item.label)}</span><span class="count-badge">${item.count}</span>
+                </button>
+            `).join("");
+            container.querySelectorAll("[data-filter-key]").forEach(button => {
+                button.addEventListener("click", () => setter(decodeURIComponent(button.dataset.filterKey || "")));
+            });
+        }
+
+        function renderFilters() {
+            renderFilterList("department-filters", buildDepartmentItems(), activeDepartmentFilter, setDepartmentFilter);
+            renderFilterList("access-filters", buildAccessItems(), activeAccessFilter, setAccessFilter);
+        }
+
+        function renderDocuments() {
+            const docs = filteredDocuments();
+            const tbody = document.getElementById("documents-body");
+            const empty = document.getElementById("documents-empty");
+            document.getElementById("result-count").textContent = `표시 ${docs.length}건`;
+            document.getElementById("selection-count").textContent = `선택 ${selectedKeys.size}건`;
+
+            if (!docs.length) {
+                tbody.innerHTML = "";
+                empty.style.display = "block";
+                document.getElementById("select-all").checked = false;
+                return;
+            }
+
+            empty.style.display = "none";
+            tbody.innerHTML = docs.map((doc, idx) => {
+                const statusClass = doc.file_exists ? "complete" : "missing";
+                const statusLabel = doc.file_exists ? (doc.status || "완료") : "경로 누락";
+                const checked = selectedKeys.has(docKey(doc)) ? "checked" : "";
+                const meta = `${doc.source_type || "upload"} · ${doc.chunk_count || 0} chunks${doc.department_only ? " · 부서 제한" : ""}`;
+                return `
+                    <tr>
+                        <td><input type="checkbox" data-doc-index="${idx}" ${checked}></td>
+                        <td><div class="doc-name"><span>📄</span><div><div class="doc-title" title="${esc(doc.source)}">${esc(doc.source)}</div><div class="muted-text">${esc(meta)}</div></div></div></td>
+                        <td>${esc(doc.department || "-")}</td>
+                        <td>${esc(formatBytes(doc.file_size_bytes))}</td>
+                        <td>${esc(formatDate(doc.uploaded_at || doc.updated_at))}</td>
+                        <td><span class="access-badge">${esc(doc.department || "-")}</span></td>
+                        <td><span class="status-badge ${statusClass}">${esc(statusLabel)}</span></td>
+                        <td><div class="row-actions"><button class="mini-btn doc-delete-btn" type="button" data-doc-index="${idx}">삭제</button></div></td>
+                    </tr>
+                `;
+            }).join("");
+
+            const visibleKeys = docs.map(docKey);
+            document.getElementById("select-all").checked = visibleKeys.length > 0 && visibleKeys.every(key => selectedKeys.has(key));
+            tbody.querySelectorAll("input[data-doc-index]").forEach(input => {
+                input.addEventListener("change", event => {
+                    const doc = docs[Number(event.target.dataset.docIndex)];
+                    const key = docKey(doc);
+                    if (event.target.checked) selectedKeys.add(key);
+                    else selectedKeys.delete(key);
+                    document.getElementById("selection-count").textContent = `선택 ${selectedKeys.size}건`;
+                });
+            });
+            tbody.querySelectorAll(".doc-delete-btn").forEach(button => {
+                button.addEventListener("click", () => {
+                    const doc = docs[Number(button.dataset.docIndex)];
+                    deleteOneDocument(doc.doc_id || "", doc.source || "", doc.source_type || "");
+                });
+            });
+        }
+
+        function renderAlerts() {
+            const items = [...clientAlerts, ...serverAlerts].slice(0, 8);
+            const list = document.getElementById("alerts-list");
+            if (!items.length) {
+                list.innerHTML = '<div class="empty-state" style="padding:20px 0;">알림이 없습니다.</div>';
+                return;
+            }
+            list.innerHTML = items.map(alert => `
+                <div class="alert-item ${esc(alert.level || "warning")}">
+                    <div class="alert-meta">${esc(formatDate(alert.created_at || new Date().toISOString()))}</div>
+                    <div>${esc(alert.message || "")}</div>
+                </div>
+            `).join("");
+        }
+
+        async function loadDocuments() {
+            const response = await fetch(API + "/admin/documents");
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || "문서 목록을 불러오지 못했습니다.");
+            allDocuments = Array.isArray(data.documents) ? data.documents : [];
+            serverAlerts = (data.alerts || []).map(item => ({ ...item, created_at: item.created_at || new Date().toISOString() }));
+            renderSummary(data.summary || {});
+            renderFilters();
+            renderDocuments();
+            renderAlerts();
+        }
+
+        function setProgress(done, total, label) {
+            document.getElementById("upload-progress").classList.add("visible");
+            document.getElementById("progress-label").textContent = label;
+            document.getElementById("progress-ratio").textContent = `${done} / ${total}`;
+            document.getElementById("progress-fill").style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
+        }
+
+        function clearProgress() {
+            document.getElementById("upload-progress").classList.remove("visible");
+            document.getElementById("progress-label").textContent = "업로드 준비 중";
+            document.getElementById("progress-ratio").textContent = "0 / 0";
+            document.getElementById("progress-fill").style.width = "0%";
+        }
+
+        async function uploadFiles(files) {
+            const list = Array.from(files || []);
+            if (!list.length) return;
+            const department = document.getElementById("department-input").value || currentUser.department || "RD";
+            document.getElementById("toolbar-upload-btn").disabled = true;
+            let completed = 0;
+
+            for (const file of list) {
+                setProgress(completed, list.length, `${file.name} 업로드 중`);
+                const fd = new FormData();
+                fd.append("file", file);
+                fd.append("admin_id", currentUser.id);
+                fd.append("department", department);
+                const response = await fetch(API + "/admin/upload", { method: "POST", body: fd });
+                const data = await response.json().catch(() => ({}));
+                completed += 1;
+                if (!response.ok) {
+                    pushAlert("error", `${file.name} 업로드 실패: ${data.detail || "오류가 발생했습니다."}`);
+                    setProgress(completed, list.length, `${file.name} 업로드 실패`);
+                    continue;
+                }
+                setProgress(completed, list.length, `${file.name} 업로드 완료`);
+                pushAlert("success", `${file.name} 업로드 완료 (${data.chunks_stored || 0} chunks)`);
+            }
+
+            document.getElementById("toolbar-upload-btn").disabled = false;
+            document.getElementById("file-input").value = "";
+            clearProgress();
+            await loadDocuments();
+        }
+
+        async function requestDeleteDocument(docId, source, sourceType) {
+            const params = new URLSearchParams();
+            if (docId) params.set("doc_id", docId);
+            if (source) params.set("source", source);
+            if (sourceType) params.set("source_type", sourceType);
+            return fetch(API + "/admin/document?" + params.toString(), { method: "DELETE" });
+        }
+
+        async function deleteOneDocument(docId, source, sourceType) {
+            const name = source || docId || "선택 문서";
+            if (!confirm(`"${name}" 문서를 삭제할까요?`)) return;
+            const response = await requestDeleteDocument(docId, source, sourceType);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                pushAlert("error", `${name} 삭제 실패: ${data.detail || "오류가 발생했습니다."}`);
+                return;
+            }
+            selectedKeys.delete(docId ? `id:${docId}` : `src:${String(source || "").toLowerCase()}`);
+            pushAlert("success", `${name} 삭제 완료`);
+            await loadDocuments();
+        }
+
+        async function deleteSelectedDocuments() {
+            const docs = filteredDocuments().filter(doc => selectedKeys.has(docKey(doc)));
+            if (!docs.length) {
+                pushAlert("warning", "선택된 문서가 없습니다.");
+                return;
+            }
+            if (!confirm(`선택한 ${docs.length}건의 문서를 삭제할까요?`)) return;
+            for (const doc of docs) {
+                const response = await requestDeleteDocument(doc.doc_id || "", doc.source || "", doc.source_type || "");
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) pushAlert("error", `${doc.source} 삭제 실패: ${data.detail || "오류가 발생했습니다."}`);
+                else pushAlert("success", `${doc.source} 삭제 완료`);
+            }
+            selectedKeys.clear();
+            await loadDocuments();
+        }
+
+        function renderAccounts() {
+            const users = getUsers();
+            const adminCount = Object.values(users).filter(user => user.role === "관리자").length;
+            const list = document.getElementById("accounts-list");
+            list.innerHTML = Object.entries(users).map(([id, info]) => `
+                <div class="account-row">
+                    <div><div class="account-name">${esc(id)}${currentUser?.id === id ? " · 현재 계정" : ""}</div><div class="account-meta">${esc(info.role || "직원")} · ${esc(info.department || "ALL")}</div></div>
+                    <div class="account-actions">
+                        <button class="mini-btn account-reset-btn" type="button" data-account-id="${encodeURIComponent(id)}">초기화</button>
+                        <button class="mini-btn account-delete-btn" type="button" data-account-id="${encodeURIComponent(id)}" ${info.role === "관리자" && adminCount <= 1 ? "disabled" : ""}>삭제</button>
+                    </div>
+                </div>
+            `).join("");
+            list.querySelectorAll(".account-reset-btn").forEach(button => {
+                button.addEventListener("click", () => resetPasswordForAccount(decodeURIComponent(button.dataset.accountId || "")));
+            });
+            list.querySelectorAll(".account-delete-btn").forEach(button => {
+                button.addEventListener("click", () => deleteAccount(decodeURIComponent(button.dataset.accountId || "")));
+            });
+        }
+
+        function addAccount() {
+            const id = document.getElementById("new-account-id").value.trim();
+            const pw = document.getElementById("new-account-pw").value;
+            const role = document.getElementById("new-account-role").value;
+            const department = document.getElementById("new-account-department").value || (role === "관리자" ? "ALL" : "RD");
+            const users = getUsers();
+            if (!id || !pw) { pushAlert("warning", "아이디와 비밀번호를 입력하세요."); return; }
+            if (users[id]) { pushAlert("warning", "이미 존재하는 계정입니다."); return; }
+            users[id] = { pw, role, department };
+            saveUsers(users);
+            document.getElementById("new-account-id").value = "";
+            document.getElementById("new-account-pw").value = "";
+            document.getElementById("new-account-department").value = role === "관리자" ? "ALL" : "RD";
+            renderAccounts();
+            pushAlert("success", `${id} 계정을 추가했습니다.`);
+        }
+
+        function deleteAccount(id) {
+            const users = getUsers();
+            if (!users[id]) return;
+            const adminCount = Object.values(users).filter(user => user.role === "관리자").length;
+            if (users[id].role === "관리자" && adminCount <= 1) {
+                pushAlert("warning", "마지막 관리자 계정은 삭제할 수 없습니다.");
+                return;
+            }
+            if (!confirm(`${id} 계정을 삭제할까요?`)) return;
+            delete users[id];
+            saveUsers(users);
+            renderAccounts();
+            pushAlert("success", `${id} 계정을 삭제했습니다.`);
+        }
+
+        function resetPasswordForAccount(id) {
+            const users = getUsers();
+            if (!users[id]) return;
+            users[id].pw = id === "admin" ? "admin123" : "123qwe";
+            saveUsers(users);
+            renderAccounts();
+            pushAlert("success", `${id} 계정 비밀번호를 ${id === "admin" ? "admin123" : "123qwe"}로 초기화했습니다.`);
+        }
+
+        function savePassword() {
+            const current = document.getElementById("current-password-input").value;
+            const next = document.getElementById("new-password-input").value;
+            const confirmValue = document.getElementById("confirm-password-input").value;
+            const users = getUsers();
+            const me = users[currentUser.id];
+            if (!me || me.pw !== current) { pushAlert("error", "현재 비밀번호가 올바르지 않습니다."); return; }
+            if (!next || next.length < 4) { pushAlert("warning", "새 비밀번호는 4자 이상으로 입력하세요."); return; }
+            if (next !== confirmValue) { pushAlert("warning", "새 비밀번호 확인이 일치하지 않습니다."); return; }
+            me.pw = next;
+            saveUsers(users);
+            document.getElementById("current-password-input").value = "";
+            document.getElementById("new-password-input").value = "";
+            document.getElementById("confirm-password-input").value = "";
+            closeModal("password-modal");
+            pushAlert("success", "비밀번호를 변경했습니다.");
+        }
+
+        async function finishAdminLogin(id, user) {
+            currentUser = { id, role: user.role, department: user.department || id };
+            document.getElementById("login-error").style.display = "none";
+            document.getElementById("login-error").textContent = "아이디 또는 비밀번호가 올바르지 않습니다.";
+            document.getElementById("login-screen").style.display = "none";
+            document.getElementById("app-shell").style.display = "";
+            document.getElementById("current-user-chip").textContent = user.department && user.department !== "ALL" ? `${id} · ${user.department}` : id;
+            document.getElementById("department-input").value = currentUser.department && currentUser.department !== "ALL" ? currentUser.department : "RD";
+            await loadDocuments();
+        }
+
+        async function login() {
+            const id = document.getElementById("login-id").value.trim();
+            const pw = document.getElementById("login-pw").value;
+            const user = getUsers()[id];
+            if (!user || user.pw !== pw) {
+                document.getElementById("login-error").style.display = "block";
+                return;
+            }
+            if (loginType === "employee") {
+                if (user.role === "관리자") {
+                    document.getElementById("login-error").textContent = "직원 로그인에는 직원 계정을 사용하세요.";
+                    document.getElementById("login-error").style.display = "block";
+                    return;
+                }
+                queueCrossLogin(id, user.role, user.department || "", "employee");
+                window.location.href = "/ui";
+                return;
+            }
+            if (user.role !== "관리자") {
+                document.getElementById("login-error").textContent = "관리자 로그인에는 관리자 계정이 필요합니다.";
+                document.getElementById("login-error").style.display = "block";
+                return;
+            }
+            await finishAdminLogin(id, user);
+        }
+
+        function logout() {
+            currentUser = null;
+            selectedKeys.clear();
+            document.getElementById("login-id").value = "";
+            document.getElementById("login-pw").value = "";
+            document.getElementById("app-shell").style.display = "none";
+            document.getElementById("login-screen").style.display = "grid";
+        }
+
+        function bindEvents() {
+            document.getElementById("login-type-employee").addEventListener("click", () => setLoginType("employee"));
+            document.getElementById("login-type-admin").addEventListener("click", () => setLoginType("admin"));
+            document.getElementById("login-btn").addEventListener("click", login);
+            document.getElementById("login-pw").addEventListener("keydown", event => { if (event.key === "Enter") login(); });
+            document.getElementById("search-input").addEventListener("input", renderDocuments);
+            document.getElementById("toolbar-upload-btn").addEventListener("click", () => document.getElementById("file-input").click());
+            document.getElementById("file-input").addEventListener("change", event => uploadFiles(event.target.files));
+            document.getElementById("go-chat-btn").addEventListener("click", () => { window.location.href = "/ui"; });
+            document.getElementById("logout-btn").addEventListener("click", logout);
+            document.getElementById("refresh-btn").addEventListener("click", loadDocuments);
+            document.getElementById("delete-selected-btn").addEventListener("click", deleteSelectedDocuments);
+            document.getElementById("manage-accounts-btn").addEventListener("click", () => { renderAccounts(); openModal("accounts-modal"); });
+            document.getElementById("change-password-btn").addEventListener("click", () => openModal("password-modal"));
+            document.getElementById("save-password-btn").addEventListener("click", savePassword);
+            document.getElementById("add-account-btn").addEventListener("click", addAccount);
+            document.getElementById("new-account-role").addEventListener("change", event => {
+                document.getElementById("new-account-department").value = event.target.value === "관리자" ? "ALL" : "RD";
+            });
+            document.getElementById("select-all").addEventListener("change", event => {
+                const docs = filteredDocuments();
+                if (event.target.checked) docs.forEach(doc => selectedKeys.add(docKey(doc)));
+                else docs.forEach(doc => selectedKeys.delete(docKey(doc)));
+                renderDocuments();
+            });
+            document.querySelectorAll("[data-close]").forEach(button => button.addEventListener("click", () => closeModal(button.dataset.close)));
+            document.querySelectorAll(".modal-bg").forEach(modal => modal.addEventListener("click", event => { if (event.target === modal) closeModal(modal.id); }));
+
+            const dropzone = document.getElementById("dropzone");
+            ["dragenter", "dragover"].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.add("dragover"); }));
+            ["dragleave", "drop"].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.remove("dragover"); }));
+            dropzone.addEventListener("drop", event => uploadFiles(event.dataTransfer.files));
+            dropzone.addEventListener("click", () => document.getElementById("file-input").click());
+            dropzone.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); document.getElementById("file-input").click(); } });
+        }
+
+        function setDepartmentFilter(key) { activeDepartmentFilter = key; renderFilters(); renderDocuments(); }
+        function setAccessFilter(key) { activeAccessFilter = key; renderFilters(); renderDocuments(); }
+
+        bindEvents();
+        setLoginType("admin");
+        renderAlerts();
+        (async () => {
+            const pending = consumeCrossLogin("admin");
+            if (!pending) return;
+            const user = getUsers()[pending.id];
+            if (!user || user.role !== "관리자") return;
+            await finishAdminLogin(pending.id, user);
+        })();
+        window.setDepartmentFilter = setDepartmentFilter;
+        window.setAccessFilter = setAccessFilter;
+    </script>
+</body>
+</html>

@@ -126,6 +126,7 @@ def _build_where(
     filter_doc_id: Optional[str] = None,
     filter_source_type: Optional[str] = None,
     filter_owner_id: Optional[str] = None,
+    filter_department: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     clauses = []
     if filter_source:
@@ -134,6 +135,8 @@ def _build_where(
         clauses.append({"doc_id": filter_doc_id})
     if filter_source_type:
         clauses.append({"source_type": filter_source_type})
+    if filter_department:
+        clauses.append({"department": filter_department})
 
     # Owner scoping rules:
     # - source_type=upload or explicit source/doc scope: force exact owner match
@@ -163,6 +166,7 @@ def similarity_search_with_scores(
     filter_doc_id: Optional[str] = None,
     filter_source_type: Optional[str] = None,
     filter_owner_id: Optional[str] = None,
+    filter_department: Optional[str] = None,
     min_score: Optional[float] = None,
 ) -> List[Tuple[Document, float]]:
     """Return similarity search results with relevance scores when available."""
@@ -174,6 +178,7 @@ def similarity_search_with_scores(
         filter_doc_id=filter_doc_id,
         filter_source_type=filter_source_type,
         filter_owner_id=filter_owner_id,
+        filter_department=filter_department,
     )
     if where:
         kwargs["filter"] = where
@@ -234,6 +239,7 @@ def similarity_search(
     filter_doc_id: Optional[str] = None,
     filter_source_type: Optional[str] = None,
     filter_owner_id: Optional[str] = None,
+    filter_department: Optional[str] = None,
     min_score: Optional[float] = None,
 ) -> List[Document]:
     """
@@ -248,6 +254,7 @@ def similarity_search(
         filter_doc_id=filter_doc_id,
         filter_source_type=filter_source_type,
         filter_owner_id=filter_owner_id,
+        filter_department=filter_department,
         min_score=min_score,
     )
     if min_score is not None:
@@ -264,6 +271,7 @@ def get_documents_by_source(
     doc_id: Optional[str] = None,
     source_type: Optional[str] = None,
     owner_id: Optional[str] = None,
+    department: Optional[str] = None,
 ) -> List[Document]:
     """
     Return all chunks for a single ingested document, ordered by page/chunk.
@@ -277,6 +285,7 @@ def get_documents_by_source(
         filter_doc_id=doc_id,
         filter_source_type=source_type,
         filter_owner_id=owner_id,
+        filter_department=department,
     )
     kwargs = {"include": ["documents", "metadatas"]}
     if where:
@@ -323,6 +332,7 @@ def get_document_chunk_count(
     doc_id: Optional[str] = None,
     source_type: Optional[str] = None,
     owner_id: Optional[str] = None,
+    department: Optional[str] = None,
 ) -> int:
     """Return how many chunks exist for a scoped document filter."""
     vs = get_vectorstore()
@@ -331,6 +341,7 @@ def get_document_chunk_count(
         filter_doc_id=doc_id,
         filter_source_type=source_type,
         filter_owner_id=owner_id,
+        filter_department=department,
     )
     kwargs = {"include": ["metadatas"]}
     if where:

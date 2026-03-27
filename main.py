@@ -35,6 +35,7 @@ from app.pipeline.ingest import ingest_folder
 from app.api.routes import router as main_router
 from app.api.openai_compat import router as openai_router
 from app.api.upload_ui import router as ui_router
+from app.api.admin_ui import router as admin_ui_router
 
 
 @asynccontextmanager
@@ -96,3 +97,4 @@ if STATIC_DIR.exists():
 app.include_router(main_router)
 app.include_router(openai_router)
 app.include_router(ui_router)
+app.include_router(admin_ui_router)

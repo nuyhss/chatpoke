@@ -123,6 +123,8 @@ def upsert_document(
             "page_kind_counts": _page_kind_counts(page_docs),
             "status": "ingested",
             "owner_id": owner_id if source_type == "upload" else None,
+            "uploader_id": first_meta.get("uploader_id") or owner_id,
+            "department": first_meta.get("department"),
             "updated_at": now,
         }
 
@@ -171,6 +173,28 @@ def list_documents(owner_id: Optional[str] = None, source_type: Optional[str] = 
         ]
 
     return docs
+
+
+def update_document(doc_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Patch one registry entry with extra metadata and refresh updated_at."""
+    if not doc_id:
+        return None
+
+    safe_updates = {key: value for key, value in (updates or {}).items() if key and value is not None}
+    if not safe_updates:
+        return get_document(doc_id)
+
+    with _registry_lock:
+        registry = _load_registry()
+        documents = registry.get("documents", [])
+        existing = next((doc for doc in documents if doc.get("doc_id") == doc_id), None)
+        if not existing:
+            return None
+
+        existing.update(safe_updates)
+        existing["updated_at"] = _utc_now()
+        _save_registry(registry)
+        return existing
 
 
 def remove_documents(

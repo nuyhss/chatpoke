@@ -68,10 +68,11 @@ def _compute_checksum(file_path: Path) -> str:
 def _build_artifact_meta(file_path: Path, page_total: int, input_type: str) -> dict:
     """Build shared metadata for all pages/chunks extracted from one file."""
     checksum = _compute_checksum(file_path)
+    path_fingerprint = hashlib.sha1(str(file_path.resolve()).encode("utf-8", errors="ignore")).hexdigest()[:6]
     return {
         "source": file_path.name,
         "source_path": str(file_path),
-        "doc_id": f"{file_path.stem}-{checksum[:12]}",
+        "doc_id": f"{file_path.stem}-{path_fingerprint}-{checksum[:12]}",
         "doc_checksum": checksum,
         "page_total": page_total,
         "input_type": input_type,

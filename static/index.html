@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>삼육재단AI</title>
+    <title>틸론 AI</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -29,6 +29,9 @@
         .fg label { display: block; font-size: 12px; font-weight: 700; color: var(--ts); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
         .fg input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--tp); font-size: 15px; font-family: inherit; outline: none; transition: border-color .2s; }
         .fg input:focus { border-color: var(--accent); }
+        .login-type-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .login-type-btn { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg3); color: var(--ts); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .login-type-btn.active { background: rgba(37,99,235,.10); color: var(--accent); border-color: rgba(37,99,235,.35); }
         .login-btn { width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; margin-top: 8px; }
         .login-btn:hover { background: var(--accent2); }
         .login-err { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
@@ -185,9 +188,13 @@
             <span>삼육재단AI</span>
         </div>
         <h2>로그인</h2>
-        <p>직원 계정으로 로그인하세요</p>
-        <div class="fg"><label>아이디</label><input type="text" id="li-id" placeholder="아이디 입력" autocomplete="off"></div>
-        <div class="fg"><label>비밀번호</label><input type="password" id="li-pw" placeholder="비밀번호 입력"></div>
+        <p id="login-help">직원 또는 관리자로 로그인하세요. 직원 계정은 `rd`, `md`, `od`를 사용합니다.</p>
+        <div class="login-type-row">
+            <button type="button" class="login-type-btn active" id="lt-employee" onclick="setLoginType('employee')">직원 로그인</button>
+            <button type="button" class="login-type-btn" id="lt-admin" onclick="setLoginType('admin')">관리자 로그인</button>
+        </div>
+        <div class="fg"><label>아이디</label><input type="text" id="li-id" placeholder="예: rd 또는 admin" autocomplete="off"></div>
+        <div class="fg"><label>비밀번호</label><input type="password" id="li-pw" placeholder="예: 123qwe 또는 admin123"></div>
         <button class="login-btn" onclick="doLogin()">로그인</button>
         <div class="login-err" id="li-err">아이디 또는 비밀번호가 올바르지 않습니다.</div>
     </div>
@@ -271,15 +278,32 @@
 <script>
     const API = window.location.origin;
 
-    const USERS = JSON.parse(localStorage.getItem('ai_users') || 'null') || {
-        'admin': { pw: 'admin123', role: '관리자' },
-        'tilon': { pw: 'tilon123', role: '일반 직원' },
-        '직원1': { pw: '1234', role: '일반 직원' }
+    const DEFAULT_USERS = {
+        'admin': { pw: 'admin123', role: '관리자', department: 'ALL' },
+        'rd': { pw: '123qwe', role: '직원', department: 'RD' },
+        'md': { pw: '123qwe', role: '직원', department: 'MD' },
+        'od': { pw: '123qwe', role: '직원', department: 'OD' }
     };
+
+    function mergeUsers(raw) {
+        const merged = { ...DEFAULT_USERS };
+        Object.entries(raw || {}).forEach(([id, info]) => {
+            merged[id] = {
+                pw: info?.pw || '',
+                role: info?.role || '직원',
+                department: info?.department || (id === 'admin' ? 'ALL' : 'RD')
+            };
+        });
+        localStorage.setItem('ai_users', JSON.stringify(merged));
+        return merged;
+    }
+
+    const USERS = mergeUsers(JSON.parse(localStorage.getItem('ai_users') || 'null') || {});
 
     const CHAT_KEY_PREFIX = 'ai_chats';
     const DOC_KEY_PREFIX = 'ai_uploaded_docs';
     const SYS_PROMPT_KEY_PREFIX = 'ai_sys_prompt';
+    const CROSS_LOGIN_KEY = 'ai_cross_login';
     const MAX_SHELF_FILES = 90;
     const HISTORY_MAX_MESSAGES = 12;
 
@@ -295,6 +319,17 @@
     let shelfUploadAbortController = null;
     let shelfUploadInProgress = false;
     let shelfUploadCancelRequested = false;
+    let loginType = 'employee';
+
+    function setLoginType(type) {
+        loginType = type === 'admin' ? 'admin' : 'employee';
+        document.getElementById('lt-employee').classList.toggle('active', loginType === 'employee');
+        document.getElementById('lt-admin').classList.toggle('active', loginType === 'admin');
+        document.getElementById('login-help').textContent = loginType === 'admin'
+            ? '관리자 계정으로 로그인하면 문서 관리 화면으로 이동합니다'
+            : '직원 계정으로 로그인하면 부서 문서 기반 채팅으로 이동합니다';
+        document.getElementById('li-err').style.display = 'none';
+    }
 
     function now() {
         return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -352,6 +387,54 @@
         return currentUser ? `${prefix}:${currentUser.id}` : prefix;
     }
 
+    function queueCrossLogin(id, role, department, target) {
+        localStorage.setItem(CROSS_LOGIN_KEY, JSON.stringify({
+            id,
+            role,
+            department,
+            target,
+            ts: Date.now()
+        }));
+    }
+
+    function consumeCrossLogin(target) {
+        try {
+            const raw = JSON.parse(localStorage.getItem(CROSS_LOGIN_KEY) || 'null');
+            if (!raw || raw.target !== target) return null;
+            if (Date.now() - Number(raw.ts || 0) > 2 * 60 * 1000) {
+                localStorage.removeItem(CROSS_LOGIN_KEY);
+                return null;
+            }
+            localStorage.removeItem(CROSS_LOGIN_KEY);
+            return raw;
+        } catch {
+            localStorage.removeItem(CROSS_LOGIN_KEY);
+            return null;
+        }
+    }
+
+    function finishEmployeeLogin(id, u) {
+        currentUser = { id, role: u.role, department: u.department || '' };
+        loadUserState();
+        document.getElementById('li-err').style.display = 'none';
+        document.getElementById('li-err').textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
+        document.getElementById('sb-user').textContent = u.department && u.department !== 'ALL' ? `${id} · ${u.department}` : id;
+        document.getElementById('u-name').textContent = id;
+        document.getElementById('u-role').textContent = u.department && u.department !== 'ALL' ? `${u.role} · ${u.department}` : u.role;
+        document.getElementById('u-avatar').textContent = id[0].toUpperCase();
+
+        if (chats.length === 0) newChat();
+        else {
+            renderChatList();
+            loadChat(chats[0].id);
+        }
+        renderShelfDocs();
+
+        return Promise.all([loadHealth(), syncDocsFromServer()]);
+    }
+
     function loadUserState() {
         chats = normalizeChats(JSON.parse(localStorage.getItem(userScopedKey(CHAT_KEY_PREFIX)) || '[]'));
         uploadedDocs = normalizeDocs(JSON.parse(localStorage.getItem(userScopedKey(DOC_KEY_PREFIX)) || '[]'));
@@ -404,24 +487,26 @@
             return;
         }
 
-        currentUser = { id, role: u.role };
-        loadUserState();
-        document.getElementById('li-err').style.display = 'none';
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('app').style.display = 'flex';
-        document.getElementById('sb-user').textContent = id;
-        document.getElementById('u-name').textContent = id;
-        document.getElementById('u-role').textContent = u.role;
-        document.getElementById('u-avatar').textContent = id[0].toUpperCase();
-
-        if (chats.length === 0) newChat();
-        else {
-            renderChatList();
-            loadChat(chats[0].id);
+        if (loginType === 'admin') {
+            if (u.role !== '관리자') {
+                document.getElementById('li-err').textContent = '관리자 로그인에는 관리자 계정이 필요합니다.';
+                document.getElementById('li-err').style.display = 'block';
+                document.getElementById('li-pw').value = '';
+                return;
+            }
+            queueCrossLogin(id, u.role, u.department || '', 'admin');
+            window.location.href = '/admin';
+            return;
         }
-        renderShelfDocs();
 
-        await Promise.all([loadHealth(), syncDocsFromServer()]);
+        if (u.role === '관리자') {
+            document.getElementById('li-err').textContent = '직원 로그인에는 직원 계정을 사용하세요.';
+            document.getElementById('li-err').style.display = 'block';
+            document.getElementById('li-pw').value = '';
+            return;
+        }
+
+        await finishEmployeeLogin(id, u);
     }
 
     function doLogout() {
@@ -440,6 +525,15 @@
     document.addEventListener('keydown', e => {
         if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') doLogin();
     });
+
+    setLoginType('employee');
+    (async () => {
+        const pending = consumeCrossLogin('employee');
+        if (!pending) return;
+        const u = USERS[pending.id];
+        if (!u || u.role === '관리자') return;
+        await finishEmployeeLogin(pending.id, u);
+    })();
 
     async function loadHealth() {
         try {
@@ -950,7 +1044,9 @@
                 active_doc_id: useUploadScope ? (chat.active_doc_id || null) : null,
                 active_source_type: useUploadScope ? 'upload' : null,
                 web_search_enabled: true,
-                user_id: currentUser ? currentUser.id : null
+                user_id: currentUser ? currentUser.id : null,
+                user_role: currentUser ? currentUser.role : null,
+                department: currentUser && currentUser.role === '직원' ? currentUser.department : null
             };
 
             const res = await fetch(API + '/chat', {

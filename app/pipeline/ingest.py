@@ -30,6 +30,7 @@ def _annotate_source_identity(
     docs: List[Document],
     file_path: Path,
     owner_id: str = None,
+    department: str = None,
 ) -> List[Document]:
     """Add source identity metadata before chunking so it survives downstream."""
     source_type = infer_source_type(file_path)
@@ -44,13 +45,15 @@ def _annotate_source_identity(
                     "source_type": source_type,
                     "doc_scope": doc_scope,
                     "owner_id": owner_id if source_type == "upload" else None,
+                    "uploader_id": owner_id,
+                    "department": department,
                 },
             )
         )
     return annotated
 
 
-def ingest_single_file(file_path: Path, owner_id: str = None) -> Dict[str, Any]:
+def ingest_single_file(file_path: Path, owner_id: str = None, department: str = None) -> Dict[str, Any]:
     """
     Parse, chunk, and store a single file into the vectorstore.
     Used by the /upload endpoint when users attach files in chat.
@@ -77,7 +80,7 @@ def ingest_single_file(file_path: Path, owner_id: str = None) -> Dict[str, Any]:
         }
     parse_seconds = time.perf_counter() - parse_started_at
 
-    docs = _annotate_source_identity(docs, file_path, owner_id=owner_id)
+    docs = _annotate_source_identity(docs, file_path, owner_id=owner_id, department=department)
 
     if not docs:
         return {
