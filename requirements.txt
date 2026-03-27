@@ -1,0 +1,54 @@
+# ══════════════════════════════════════════════════════════════════════
+# Tilon AI Chatbot — Dependencies
+# ══════════════════════════════════════════════════════════════════════
+
+# ── API ───────────────────────────────────────────────────────────────
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0
+python-dotenv>=1.0.0
+python-multipart>=0.0.6    # Required for file uploads (UploadFile)
+requests>=2.31.0
+httpx>=0.27.0
+
+# ── LangChain ─────────────────────────────────────────────────────────
+langchain-core>=0.2.0
+langchain-text-splitters>=0.2.0
+langchain-chroma>=0.1.0
+langchain-huggingface>=0.0.3
+
+# ── Embedding ─────────────────────────────────────────────────────────
+sentence-transformers>=2.2.0
+chromadb>=0.4.0
+
+# ── PDF Parsing ───────────────────────────────────────────────────────
+PyMuPDF>=1.23.0           # fitz
+marker-pdf>=0.2.0         # marker_single CLI
+pypdf>=5.0.0
+pdfplumber>=0.11.0
+
+# ── OCR ───────────────────────────────────────────────────────────────
+Pillow>=10.0.0
+pytesseract>=0.3.10
+pdf2image>=1.16.0
+openai-whisper>=20250625
+
+# ── Language Detection (NEW) ──────────────────────────────────────────
+langdetect>=1.0.9
+
+# ── Reranker (optional — install if RERANKER_ENABLED=true) ────────────
+# FlagEmbedding>=1.2.0
+
+# ── Web Search (optional — install if using Tavily) ──────────────────
+# tavily-python>=0.3.0
+# duckduckgo-search>=6.0.0
+
+# ── Fine-Tuning (Usama's workstream — install separately) ────────────
+# torch>=2.1.0
+# transformers>=4.36.0
+# peft>=0.7.0
+# bitsandbytes>=0.41.0
+# trl>=0.7.0
+# datasets>=2.14.0
+# accelerate>=0.24.0
+# wandb>=0.16.0

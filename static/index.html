@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>삼육재단AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #f5f6f8; --bg2: #ffffff; --bg3: #f0f1f3; --bgh: #e8eaed;
+            --accent: #2563eb; --accent2: #3b82f6;
+            --tp: #1a1a2e; --ts: #64748b; --tm: #94a3b8; --border: #e2e8f0;
+            --success: #10b981; --danger: #ef4444;
+            --user-bg: rgba(37,99,235,0.07); --user-border: #2563eb; --sw: 280px;
+        }
+        body { font-family: 'Pretendard', -apple-system, sans-serif; background: var(--bg); color: var(--tp); height: 100vh; overflow: hidden; }
+
+        #login-screen { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 200; }
+        .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 48px 40px; width: 400px; box-shadow: 0 8px 40px rgba(0,0,0,.10); }
+        .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+        .login-logo span { font-size: 20px; font-weight: 700; color: var(--tp); }
+        .brand-mark { display: block; height: auto; flex-shrink: 0; }
+        .brand-mark.login { width: 104px; }
+        .brand-mark.sidebar { width: 88px; margin-right: 8px; }
+        .login-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+        .login-card p { font-size: 14px; color: var(--ts); margin-bottom: 28px; }
+        .fg { margin-bottom: 16px; }
+        .fg label { display: block; font-size: 12px; font-weight: 700; color: var(--ts); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+        .fg input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--tp); font-size: 15px; font-family: inherit; outline: none; transition: border-color .2s; }
+        .fg input:focus { border-color: var(--accent); }
+        .login-btn { width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; margin-top: 8px; }
+        .login-btn:hover { background: var(--accent2); }
+        .login-err { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
+
+        #app { display: none; height: 100vh; flex-direction: row; }
+
+        .sidebar { width: var(--sw); background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+        .sb-header { padding: 16px; border-bottom: 1px solid var(--border); }
+        .ws-name { font-size: 16px; font-weight: 700; color: var(--tp); display: flex; align-items: center; }
+        .us-status { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+        .sdot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; }
+        .us-status span { font-size: 13px; color: var(--ts); }
+        .sb-search { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+        .sb-search-box { display: flex; align-items: center; gap: 6px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; }
+        .sb-search-box input { flex: 1; background: none; border: none; outline: none; font-size: 12px; color: var(--tp); font-family: inherit; }
+        .sb-sec { padding: 12px 8px 4px; }
+        .sb-sec-title { font-size: 11px; font-weight: 700; color: var(--tm); text-transform: uppercase; letter-spacing: .8px; padding: 0 8px; margin-bottom: 4px; }
+        .sb-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: background .15s; font-size: 13px; color: var(--ts); }
+        .sb-item:hover { background: var(--bgh); color: var(--tp); }
+        .sb-item.active { background: var(--accent); color: #fff; }
+        .sb-item .ic { font-size: 14px; flex-shrink: 0; }
+        .sb-item .chat-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sb-item .del-btn { opacity: 0; font-size: 11px; padding: 2px 5px; border-radius: 3px; color: var(--tm); background: none; border: none; cursor: pointer; }
+        .sb-item:hover .del-btn { opacity: 1; }
+        .sb-item .del-btn:hover { color: var(--danger); }
+        .new-btn { margin: 8px; padding: 8px 12px; background: transparent; border: 1px dashed var(--border); border-radius: 6px; color: var(--tm); font-size: 13px; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all .2s; }
+        .new-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .chat-list { max-height: 220px; overflow-y: auto; margin: 0 8px; }
+        .chat-list::-webkit-scrollbar { width: 3px; }
+        .chat-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+        .shelf-wrap { padding: 0 8px 8px; }
+        .shelf-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .shelf-upload-btn { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg3); color: var(--ts); font-size: 12px; font-family: inherit; cursor: pointer; transition: all .2s; }
+        .shelf-upload-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .shelf-upload-btn:disabled { opacity: .6; cursor: not-allowed; }
+        .shelf-stop-btn { display: none; padding: 8px 10px; border: 1px solid #fecaca; border-radius: 6px; background: #fff1f2; color: #dc2626; font-size: 12px; font-family: inherit; cursor: pointer; white-space: nowrap; }
+        .shelf-stop-btn.show { display: inline-flex; align-items: center; justify-content: center; }
+        .shelf-stop-btn:hover { background: #ffe4e6; border-color: #fca5a5; }
+        .shelf-list { max-height: 210px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: #fafbfd; padding: 6px; }
+        .shelf-list::-webkit-scrollbar { width: 4px; }
+        .shelf-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .shelf-empty { font-size: 12px; color: var(--tm); text-align: center; padding: 16px 8px; }
+        .shelf-item { border: 1px solid var(--border); background: #fff; border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+        .shelf-item:last-child { margin-bottom: 0; }
+        .shelf-item-top { display: flex; align-items: center; gap: 6px; }
+        .shelf-item-name { flex: 1; min-width: 0; background: none; border: none; text-align: left; font-size: 12px; color: var(--tp); cursor: pointer; font-family: inherit; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .shelf-item-name.active { color: var(--accent); }
+        .shelf-del-btn { flex-shrink: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--tm); cursor: pointer; font-family: inherit; }
+        .shelf-del-btn:hover { border-color: var(--danger); color: var(--danger); background: #fff5f5; }
+        .shelf-item-meta { margin-top: 4px; font-size: 11px; color: var(--tm); }
+        .shelf-count { margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; color: var(--accent); background: rgba(37,99,235,0.10); border: 1px solid rgba(37,99,235,0.25); }
+
+        .quick-menu { margin-top: auto; }
+        .sb-footer { padding: 12px; border-top: 1px solid var(--border); }
+        .user-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; }
+        .avatar { width: 32px; height: 32px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
+        .ur-text { flex: 1; min-width: 0; }
+        .ur-name { font-size: 14px; font-weight: 600; color: var(--tp); }
+        .ur-role { font-size: 11px; color: var(--tm); }
+        .logout-btn { background: none; border: 1px solid var(--border); color: var(--ts); cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; padding: 4px 8px; border-radius: 5px; white-space: nowrap; }
+        .logout-btn:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+        .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .chat-header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: var(--bg); flex-shrink: 0; }
+        .chat-header h3 { font-size: 15px; font-weight: 700; color: var(--tp); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .model-chip { font-size: 11px; color: var(--ts); background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-family: monospace; }
+        .hdr-btn { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg2); color: var(--ts); font-size: 12px; font-family: inherit; cursor: pointer; transition: all .2s; white-space: nowrap; }
+        .hdr-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 2px; scroll-behavior: smooth; }
+        .messages::-webkit-scrollbar { width: 4px; }
+        .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .msg-group { display: flex; flex-direction: column; margin-bottom: 14px; animation: msgIn .2s ease; }
+        @keyframes msgIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .msg-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+        .msg-sender { font-size: 14px; font-weight: 700; }
+        .msg-sender.ai { color: var(--accent); }
+        .typing-label { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-size: 13px; }
+        .msg-time { font-size: 11px; color: var(--tm); }
+        .copy-btn { opacity: 0; font-size: 11px; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg3); color: var(--ts); cursor: pointer; font-family: inherit; }
+        .msg-group:hover .copy-btn { opacity: 1; }
+        .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .msg-text { font-size: 14px; line-height: 1.65; color: var(--tp); white-space: pre-wrap; word-break: break-word; }
+        .msg-text.user { background: var(--user-bg); border-left: 3px solid var(--user-border); padding: 8px 12px; border-radius: 0 6px 6px 0; }
+
+        .typing { display: flex; align-items: center; gap: 8px; color: var(--tm); font-size: 13px; padding: 4px 0; }
+        .dots { display: flex; gap: 4px; }
+        .dots span { width: 6px; height: 6px; background: var(--tm); border-radius: 50%; animation: bounce .8s infinite; }
+        .dots span:nth-child(2) { animation-delay: .15s; }
+        .dots span:nth-child(3) { animation-delay: .3s; }
+        @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+
+        .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; gap: 10px; }
+        .welcome h2 { font-size: 22px; font-weight: 700; color: var(--tp); }
+        .welcome p { font-size: 14px; color: var(--ts); max-width: 360px; line-height: 1.6; }
+        .quick-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+        .qb { padding: 7px 14px; background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; color: var(--ts); font-size: 13px; font-family: inherit; cursor: pointer; transition: all .2s; }
+        .qb:hover { border-color: var(--accent); color: var(--accent); }
+
+        .input-area { padding: 10px 20px 14px; background: var(--bg); flex-shrink: 0; }
+        .input-box { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: flex-end; gap: 6px; padding: 8px 8px 8px 14px; transition: border-color .2s; }
+        .input-box:focus-within { border-color: var(--accent); }
+        #msg-input { flex: 1; background: none; border: none; outline: none; color: var(--tp); font-size: 14px; font-family: inherit; resize: none; max-height: 120px; min-height: 22px; line-height: 1.5; padding: 2px 0; }
+        #msg-input::placeholder { color: var(--tm); }
+        .send-btn { width: 32px; height: 32px; background: var(--accent); border: none; border-radius: 6px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+        .send-btn:hover { background: var(--accent2); }
+        .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+        .stop-btn { width: 32px; height: 32px; background: #fee2e2; border: 1px solid var(--danger); border-radius: 6px; color: var(--danger); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+        .input-hint { font-size: 11px; color: var(--tm); margin-top: 5px; text-align: center; }
+
+        .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; font-size: 13px; color: var(--tp); z-index: 300; opacity: 0; transform: translateY(8px); transition: all .3s; pointer-events: none; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+
+        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; display: none; align-items: center; justify-content: center; }
+        .modal-bg.open { display: flex; }
+        .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 500px; max-width: 90vw; }
+        .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: var(--tp); }
+        .modal p { font-size: 13px; color: var(--ts); margin-bottom: 16px; }
+        .modal textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 12px; color: var(--tp); font-size: 13px; font-family: inherit; resize: vertical; min-height: 120px; outline: none; line-height: 1.5; }
+        .modal textarea:focus { border-color: var(--accent); }
+        .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+        .mbtn { padding: 8px 18px; border-radius: 6px; font-size: 14px; font-family: inherit; cursor: pointer; border: none; }
+        .mbtn.cancel { background: var(--bg3); color: var(--ts); border: 1px solid var(--border); }
+        .mbtn.save { background: var(--accent); color: #fff; }
+
+        @media(max-width:900px) {
+            .sidebar { display: none; }
+            .chat-header { padding: 12px; }
+            .input-area { padding: 10px 12px 12px; }
+            .messages { padding: 14px; }
+        }
+    </style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<div class="modal-bg" id="sp-modal">
+    <div class="modal">
+        <h3>⚙️ 시스템 프롬프트 설정</h3>
+        <p>AI의 역할과 응답 방식을 지정하세요.</p>
+        <textarea id="sp-input" placeholder="예: 당신은 사내 법무팀 삼육재단AI입니다."></textarea>
+        <div class="modal-btns">
+            <button class="mbtn cancel" onclick="closeModal('sp-modal')">취소</button>
+            <button class="mbtn save" onclick="savePrompt()">저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="login-screen">
+    <div class="login-card">
+        <div class="login-logo">
+<img class="brand-mark login" src="/static/swf-logo.svg?v=1" alt="삼육재단AI 로고">
+            <span>삼육재단AI</span>
+        </div>
+        <h2>로그인</h2>
+        <p>직원 계정으로 로그인하세요</p>
+        <div class="fg"><label>아이디</label><input type="text" id="li-id" placeholder="아이디 입력" autocomplete="off"></div>
+        <div class="fg"><label>비밀번호</label><input type="password" id="li-pw" placeholder="비밀번호 입력"></div>
+        <button class="login-btn" onclick="doLogin()">로그인</button>
+        <div class="login-err" id="li-err">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+    </div>
+</div>
+
+<div id="app">
+    <div class="sidebar">
+        <div class="sb-header">
+            <div class="ws-name">
+<img class="brand-mark sidebar" src="/static/swf-logo.svg?v=1" alt="삼육재단AI 로고">
+                삼육재단AI
+            </div>
+            <div class="us-status"><div class="sdot"></div><span id="sb-user">직원</span></div>
+        </div>
+
+        <div class="sb-search">
+            <div class="sb-search-box">
+                <span>🔎</span>
+                <input type="text" placeholder="채팅 검색..." oninput="filterChats(this.value)">
+            </div>
+        </div>
+
+        <div class="sb-sec"><div class="sb-sec-title">채팅 목록</div></div>
+        <button class="new-btn" onclick="newChat()">＋ 새 채팅</button>
+        <div class="chat-list" id="chat-list"></div>
+
+        <div class="sb-sec"><div class="sb-sec-title">업로드 파일 보관소 <span class="shelf-count" id="shelf-count">0개</span></div></div>
+        <div class="shelf-wrap">
+            <div class="shelf-head">
+                <button class="shelf-upload-btn" id="shelf-upload-btn" onclick="openShelfUpload()">📎 파일 업로드</button>
+                <button class="shelf-stop-btn" id="shelf-stop-btn" type="button" onclick="stopShelfUpload()">⏹ 중단</button>
+            </div>
+            <div class="shelf-list" id="shelf-list">
+                <div class="shelf-empty">업로드된 파일이 없습니다.</div>
+            </div>
+            <input type="file" id="shelf-file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple style="display:none" onchange="uploadToShelf(this)">
+        </div>
+
+        <div class="quick-menu">
+            <div class="sb-sec">
+                <div class="sb-sec-title">빠른 메뉴</div>
+                <div class="sb-item" onclick="quickMsg('오늘 할 일 목록 정리해줘')"><span class="ic">✅</span> 업무 정리</div>
+                <div class="sb-item" onclick="quickMsg('이메일 초안 작성해줘')"><span class="ic">✉️</span> 이메일 작성</div>
+                <div class="sb-item" onclick="quickMsg('회의록 요약해줘')"><span class="ic">📄</span> 회의록 요약</div>
+            </div>
+        </div>
+
+        <div class="sb-footer">
+            <div class="user-row">
+                <div class="avatar" id="u-avatar">A</div>
+                <div class="ur-text">
+                    <div class="ur-name" id="u-name">직원</div>
+                    <div class="ur-role" id="u-role">일반 직원</div>
+                </div>
+                <button class="logout-btn" onclick="doLogout()">로그아웃</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-area">
+        <div class="chat-header">
+            <span style="font-size:16px">💬</span>
+            <h3 id="hdr-title">새 채팅</h3>
+            <span class="model-chip" id="model-chip">qwen2.5:7b</span>
+            <button class="hdr-btn" onclick="openModal('sp-modal')">⚙️ 프롬프트</button>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="input-area">
+            <div class="input-box">
+                <textarea id="msg-input" rows="1" placeholder="메시지 입력... (Shift+Enter 줄바꿈)"></textarea>
+                <button class="stop-btn" id="stop-btn" onclick="stopGeneration()" style="display:none">⏹</button>
+                <button class="send-btn" id="send-btn" onclick="sendMsg()">➤</button>
+            </div>
+            <div class="input-hint">AI가 실수할 수 있습니다. 중요한 정보는 반드시 확인하세요.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API = window.location.origin;
+
+    const USERS = JSON.parse(localStorage.getItem('ai_users') || 'null') || {
+        'admin': { pw: 'admin123', role: '관리자' },
+        'tilon': { pw: 'tilon123', role: '일반 직원' },
+        '직원1': { pw: '1234', role: '일반 직원' }
+    };
+
+    const CHAT_KEY_PREFIX = 'ai_chats';
+    const DOC_KEY_PREFIX = 'ai_uploaded_docs';
+    const SYS_PROMPT_KEY_PREFIX = 'ai_sys_prompt';
+    const MAX_SHELF_FILES = 90;
+    const HISTORY_MAX_MESSAGES = 12;
+
+    const DEFAULT_SYSTEM_PROMPT = '당신은 삼육재단AI입니다. 한국어로 친절하고 명확하게 답변하세요. 중국어(한자)는 절대 사용하지 마세요.';
+
+    let currentUser = null;
+    let isLoading = false;
+    let abortController = null;
+    let systemPrompt = DEFAULT_SYSTEM_PROMPT;
+    let chats = [];
+    let uploadedDocs = [];
+    let currentChatId = null;
+    let shelfUploadAbortController = null;
+    let shelfUploadInProgress = false;
+    let shelfUploadCancelRequested = false;
+
+    function now() {
+        return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function esc(t) {
+        return String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function toast(msg, dur = 2500) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), dur);
+    }
+
+    function normalizeChats(raw) {
+        const list = Array.isArray(raw) ? raw : [];
+        return list.map(chat => ({
+            id: chat.id || ('c_' + Date.now()),
+            title: chat.title || '새 채팅',
+            active_source: chat.active_source || null,
+            active_doc_id: chat.active_doc_id || null,
+            messages: Array.isArray(chat.messages) ? chat.messages.map(m => ({
+                sender: m.sender || '삼육재단AI',
+                text: m.text || '',
+                isUser: !!m.isUser,
+                hasScope: false
+            })) : []
+        }));
+    }
+
+    function normalizeDocs(raw) {
+        const list = Array.isArray(raw) ? raw : [];
+        const map = new Map();
+        list.forEach(d => {
+            const doc = {
+                source: d.source || d.filename || '',
+                doc_id: d.doc_id || '',
+                chunks: Number(d.chunks || d.chunks_stored || 0),
+                uploaded_at: d.uploaded_at || Date.now()
+            };
+            if (!doc.source) return;
+            map.set(docKey(doc), doc);
+        });
+        return Array.from(map.values()).sort((a, b) => String(a.source).localeCompare(String(b.source), 'ko'));
+    }
+
+    function docKey(doc) {
+        if (doc.doc_id) return 'id:' + doc.doc_id;
+        return 'src:' + String(doc.source || '').toLowerCase();
+    }
+
+    function userScopedKey(prefix) {
+        return currentUser ? `${prefix}:${currentUser.id}` : prefix;
+    }
+
+    function loadUserState() {
+        chats = normalizeChats(JSON.parse(localStorage.getItem(userScopedKey(CHAT_KEY_PREFIX)) || '[]'));
+        uploadedDocs = normalizeDocs(JSON.parse(localStorage.getItem(userScopedKey(DOC_KEY_PREFIX)) || '[]'));
+        systemPrompt = localStorage.getItem(userScopedKey(SYS_PROMPT_KEY_PREFIX)) || DEFAULT_SYSTEM_PROMPT;
+        currentChatId = chats.length ? chats[0].id : null;
+    }
+
+    function saveChats() {
+        if (!currentUser) return;
+        localStorage.setItem(userScopedKey(CHAT_KEY_PREFIX), JSON.stringify(chats));
+    }
+
+    function saveDocs() {
+        if (!currentUser) return;
+        localStorage.setItem(userScopedKey(DOC_KEY_PREFIX), JSON.stringify(uploadedDocs));
+    }
+
+    function currentChat() {
+        return chats.find(c => c.id === currentChatId) || null;
+    }
+
+    function ensureCurrentChat() {
+        const chat = currentChat();
+        if (!chat) {
+            newChat();
+            return currentChat();
+        }
+        return chat;
+    }
+
+    function buildHistoryForAPI(messages) {
+        const list = Array.isArray(messages) ? messages : [];
+        return list
+            .slice(-HISTORY_MAX_MESSAGES)
+            .map(m => ({
+                role: m.isUser ? 'user' : 'assistant',
+                content: String(m.text || '').trim()
+            }))
+            .filter(m => m.content.length > 0);
+    }
+
+    async function doLogin() {
+        const id = document.getElementById('li-id').value.trim();
+        const pw = document.getElementById('li-pw').value;
+        const u = USERS[id];
+
+        if (!(u && u.pw === pw)) {
+            document.getElementById('li-err').style.display = 'block';
+            document.getElementById('li-pw').value = '';
+            return;
+        }
+
+        currentUser = { id, role: u.role };
+        loadUserState();
+        document.getElementById('li-err').style.display = 'none';
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
+        document.getElementById('sb-user').textContent = id;
+        document.getElementById('u-name').textContent = id;
+        document.getElementById('u-role').textContent = u.role;
+        document.getElementById('u-avatar').textContent = id[0].toUpperCase();
+
+        if (chats.length === 0) newChat();
+        else {
+            renderChatList();
+            loadChat(chats[0].id);
+        }
+        renderShelfDocs();
+
+        await Promise.all([loadHealth(), syncDocsFromServer()]);
+    }
+
+    function doLogout() {
+        if (shelfUploadInProgress) stopShelfUpload();
+        currentUser = null;
+        chats = [];
+        uploadedDocs = [];
+        currentChatId = null;
+        systemPrompt = DEFAULT_SYSTEM_PROMPT;
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('li-id').value = '';
+        document.getElementById('li-pw').value = '';
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') doLogin();
+    });
+
+    async function loadHealth() {
+        try {
+            const r = await fetch(API + '/health');
+            const d = await r.json();
+            if (d.model) document.getElementById('model-chip').textContent = d.model;
+        } catch {}
+    }
+
+    function openModal(id) {
+        if (id === 'sp-modal') document.getElementById('sp-input').value = systemPrompt;
+        document.getElementById(id).classList.add('open');
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('open');
+    }
+
+    document.querySelectorAll('.modal-bg').forEach(bg => {
+        bg.addEventListener('click', e => {
+            if (e.target === bg) bg.classList.remove('open');
+        });
+    });
+
+    function savePrompt() {
+        systemPrompt = document.getElementById('sp-input').value.trim() || DEFAULT_SYSTEM_PROMPT;
+        if (currentUser) localStorage.setItem(userScopedKey(SYS_PROMPT_KEY_PREFIX), systemPrompt);
+        closeModal('sp-modal');
+        toast('✅ 시스템 프롬프트 저장됨');
+    }
+
+    function newChat() {
+        const id = 'c_' + Date.now();
+        chats.unshift({ id, title: '새 채팅', active_source: null, active_doc_id: null, messages: [] });
+        saveChats();
+        renderChatList();
+        loadChat(id);
+    }
+
+    function loadChat(id) {
+        currentChatId = id;
+        const chat = currentChat();
+        if (!chat) return;
+
+        document.getElementById('hdr-title').textContent = chat.title;
+        document.querySelectorAll('.sb-item[data-id]').forEach(el => {
+            el.classList.toggle('active', el.dataset.id === id);
+        });
+
+        const msgs = document.getElementById('messages');
+        msgs.innerHTML = '';
+
+        if (chat.messages.length === 0) {
+            msgs.innerHTML = `<div class="welcome" id="welcome">
+                <h2>무엇을 도와드릴까요?</h2>
+                <p>업로드 파일이 있으면 참고하고, 일반 질문도 자연스럽게 이어서 답변합니다.</p>
+                <div class="quick-btns">
+                    <button class="qb" onclick="quickMsg('오늘 할 일 정리해줘')">📝 할 일 정리</button>
+                    <button class="qb" onclick="quickMsg('이메일 답변 작성해줘')">✉️ 이메일 작성</button>
+                    <button class="qb" onclick="quickMsg('업무 보고서 형식 알려줘')">📊 보고서 작성</button>
+                </div>
+            </div>`;
+        } else {
+            chat.messages.forEach(m => renderMsg(m.sender, m.text, m.isUser, !!m.hasScope, false));
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        renderScopeBanner();
+        renderShelfDocs();
+    }
+
+    function deleteChat(id, e) {
+        e.stopPropagation();
+        chats = chats.filter(c => c.id !== id);
+        saveChats();
+        renderChatList();
+        if (currentChatId === id) {
+            if (chats.length > 0) loadChat(chats[0].id);
+            else newChat();
+        }
+    }
+
+    function renderChatList() {
+        const list = document.getElementById('chat-list');
+        list.innerHTML = '';
+        chats.forEach(chat => {
+            const el = document.createElement('div');
+            el.className = 'sb-item' + (chat.id === currentChatId ? ' active' : '');
+            el.dataset.id = chat.id;
+            el.innerHTML = `<span class="ic">💬</span><span class="chat-name">${esc(chat.title)}</span>
+                <button class="del-btn" onclick="deleteChat('${chat.id}',event)">✕</button>`;
+            el.onclick = evt => {
+                if (!evt.target.classList.contains('del-btn')) loadChat(chat.id);
+            };
+            list.appendChild(el);
+        });
+    }
+
+    function filterChats(kw) {
+        const q = String(kw || '').toLowerCase();
+        document.querySelectorAll('.sb-item[data-id]').forEach(el => {
+            const name = el.querySelector('.chat-name').textContent.toLowerCase();
+            el.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
+    }
+
+    function quickMsg(text) {
+        document.getElementById('msg-input').value = text;
+        document.getElementById('msg-input').focus();
+    }
+
+    function renderScopeBanner() {
+        // 단일 문서 스코프 UI 비활성화: 항상 업로드 전체 기준
+        return;
+    }
+
+    function setActiveDocument(source, docId, silent) {
+        // 단일 문서 스코프를 사용하지 않음
+        return;
+    }
+
+    function clearActiveScope() {
+        return;
+    }
+
+    function openShelfUpload() {
+        if (shelfUploadInProgress) {
+            toast('업로드 진행 중입니다. 중단 후 다시 시도하세요.');
+            return;
+        }
+        document.getElementById('shelf-file').click();
+    }
+
+    function setShelfUploadProgress(done, total, currentFile) {
+        const btn = document.getElementById('shelf-upload-btn');
+        const stopBtn = document.getElementById('shelf-stop-btn');
+        btn.disabled = true;
+        btn.textContent = `⏳ 업로드 중... (${done}/${total})`;
+        btn.title = currentFile || '';
+        stopBtn.classList.add('show');
+    }
+
+    function resetShelfUploadProgress() {
+        const btn = document.getElementById('shelf-upload-btn');
+        const stopBtn = document.getElementById('shelf-stop-btn');
+        btn.disabled = false;
+        btn.textContent = '📎 파일 업로드';
+        btn.title = '';
+        stopBtn.classList.remove('show');
+    }
+
+    function stopShelfUpload() {
+        if (!shelfUploadInProgress) return;
+        shelfUploadCancelRequested = true;
+        if (shelfUploadAbortController) shelfUploadAbortController.abort();
+        toast('⏹ 업로드 중단 요청됨');
+    }
+
+    function upsertDoc(doc) {
+        if (!doc || !doc.source) return;
+        const key = docKey(doc);
+        const map = new Map(uploadedDocs.map(d => [docKey(d), d]));
+        const prev = map.get(key) || {};
+        map.set(key, {
+            source: doc.source,
+            doc_id: doc.doc_id || prev.doc_id || '',
+            chunks: Number(doc.chunks || prev.chunks || 0),
+            uploaded_at: doc.uploaded_at || prev.uploaded_at || Date.now()
+        });
+        uploadedDocs = Array.from(map.values()).sort((a, b) => String(a.source).localeCompare(String(b.source), 'ko'));
+        saveDocs();
+    }
+
+    function updateShelfCount() {
+        const el = document.getElementById('shelf-count');
+        if (!el) return;
+        el.textContent = `${uploadedDocs.length}개`;
+    }
+
+    function renderShelfDocs() {
+        updateShelfCount();
+        const list = document.getElementById('shelf-list');
+
+        if (!uploadedDocs.length) {
+            list.innerHTML = '<div class="shelf-empty">업로드된 파일이 없습니다.</div>';
+            return;
+        }
+
+        list.innerHTML = '';
+        uploadedDocs.forEach(doc => {
+            const row = document.createElement('div');
+            row.className = 'shelf-item';
+
+            const top = document.createElement('div');
+            top.className = 'shelf-item-top';
+
+            const nameBtn = document.createElement('button');
+            nameBtn.type = 'button';
+            nameBtn.className = 'shelf-item-name';
+            nameBtn.textContent = doc.source;
+            nameBtn.title = doc.source;
+            nameBtn.onclick = () => toast('업로드된 모든 파일 기준으로 답변합니다.');
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'shelf-del-btn';
+            delBtn.textContent = '삭제';
+            delBtn.onclick = (evt) => {
+                evt.stopPropagation();
+                deleteShelfDoc(doc);
+            };
+
+            const meta = document.createElement('div');
+            meta.className = 'shelf-item-meta';
+            meta.textContent = doc.chunks ? (doc.chunks + ' chunks') : 'chunk 정보 없음';
+
+            top.appendChild(nameBtn);
+            top.appendChild(delBtn);
+            row.appendChild(top);
+            row.appendChild(meta);
+            list.appendChild(row);
+        });
+    }
+
+    function selectShelfDoc(source, docId) {
+        return;
+    }
+
+    async function deleteShelfDoc(doc) {
+        if (!doc || !doc.source) return;
+        if (!confirm(`"${doc.source}" 파일을 삭제할까요?`)) return;
+
+        try {
+            const query = new URLSearchParams();
+            if (doc.doc_id) {
+                query.set('doc_id', doc.doc_id);
+            }
+            query.set('source', doc.source);
+
+            if (currentUser?.id) query.set('user_id', currentUser.id);
+            const res = await fetch(API + '/upload-document?' + query.toString(), { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                if (res.status === 404) {
+                    uploadedDocs = uploadedDocs.filter(d => docKey(d) !== docKey(doc));
+                    saveDocs();
+                    renderShelfDocs();
+                    toast('서버에는 없어 목록에서만 제거했습니다.');
+                    await syncDocsFromServer();
+                    return;
+                }
+                throw new Error(data.detail || '삭제 실패');
+            }
+
+            uploadedDocs = uploadedDocs.filter(d => docKey(d) !== docKey(doc));
+
+            saveDocs();
+            saveChats();
+            renderShelfDocs();
+            renderChatList();
+            renderScopeBanner();
+            await syncDocsFromServer();
+            toast(data.message || '삭제 완료');
+        } catch (err) {
+            toast('❌ 파일 삭제 실패: ' + err.message);
+        }
+    }
+
+    async function syncDocsFromServer() {
+        try {
+            const query = new URLSearchParams();
+            if (currentUser?.id) query.set('user_id', currentUser.id);
+            const res = await fetch(API + '/docs-list' + (query.toString() ? ('?' + query.toString()) : ''));
+            if (!res.ok) return;
+            const data = await res.json();
+            const grouped = new Map();
+
+            (data.documents || []).forEach(d => {
+                if ((d.source_type || '') !== 'upload') return;
+                const key = d.doc_id ? 'id:' + d.doc_id : 'src:' + String(d.source || '').toLowerCase();
+                if (!grouped.has(key)) {
+                    grouped.set(key, {
+                        source: d.source || '',
+                        doc_id: d.doc_id || '',
+                        chunks: 0,
+                        uploaded_at: Date.now()
+                    });
+                }
+                const found = grouped.get(key);
+                found.chunks += 1;
+            });
+
+            Array.from(grouped.values()).forEach(upsertDoc);
+            renderShelfDocs();
+        } catch {}
+    }
+
+    async function uploadToShelf(input) {
+        let files = Array.from((input && input.files) || []);
+        input.value = '';
+        if (!files.length) return;
+        if (shelfUploadInProgress) {
+            toast('이미 업로드가 진행 중입니다.');
+            return;
+        }
+
+        if (files.length > MAX_SHELF_FILES) {
+            files = files.slice(0, MAX_SHELF_FILES);
+            toast(`한 번에 최대 ${MAX_SHELF_FILES}개까지 업로드합니다. 앞의 ${MAX_SHELF_FILES}개만 처리합니다.`);
+        }
+
+        shelfUploadInProgress = true;
+        shelfUploadCancelRequested = false;
+        shelfUploadAbortController = null;
+        setShelfUploadProgress(0, files.length, '');
+
+        let ok = 0;
+        let failed = 0;
+        let completed = 0;
+        let canceled = false;
+        const failedReasons = [];
+
+        try {
+            for (let i = 0; i < files.length; i++) {
+                if (shelfUploadCancelRequested) {
+                    canceled = true;
+                    break;
+                }
+                const file = files[i];
+                setShelfUploadProgress(completed, files.length, file.name);
+
+                try {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    if (currentUser?.id) fd.append('user_id', currentUser.id);
+                    shelfUploadAbortController = new AbortController();
+
+                    const res = await fetch(API + '/upload', {
+                        method: 'POST',
+                        body: fd,
+                        signal: shelfUploadAbortController.signal
+                    });
+                    const data = await res.json().catch(() => ({}));
+
+                    if (!res.ok) {
+                        failed += 1;
+                        const reason = data.detail || `${res.status} ${res.statusText}`;
+                        failedReasons.push(`${file.name}: ${reason}`);
+                        completed += 1;
+                        setShelfUploadProgress(completed, files.length, file.name);
+                        continue;
+                    }
+
+                    const chunks = Number(data.chunks_stored || 0);
+                    if (chunks <= 0) {
+                        failed += 1;
+                        failedReasons.push(`${file.name}: 텍스트 추출 실패`);
+                        completed += 1;
+                        setShelfUploadProgress(completed, files.length, file.name);
+                        continue;
+                    }
+
+                    const doc = {
+                        source: data.filename || file.name,
+                        doc_id: data.doc_id || '',
+                        chunks,
+                        uploaded_at: Date.now()
+                    };
+                    upsertDoc(doc);
+
+                    const activeChat = ensureCurrentChat();
+                    if (activeChat) {
+                        activeChat.active_source = doc.source || null;
+                        activeChat.active_doc_id = doc.doc_id || null;
+                        saveChats();
+                    }
+
+                    ok += 1;
+                    completed += 1;
+                    setShelfUploadProgress(completed, files.length, file.name);
+                } catch (err) {
+                    if (err && err.name === 'AbortError' && shelfUploadCancelRequested) {
+                        canceled = true;
+                        break;
+                    }
+                    failed += 1;
+                    failedReasons.push(`${file.name}: ${err.message}`);
+                    completed += 1;
+                    setShelfUploadProgress(completed, files.length, file.name);
+                } finally {
+                    shelfUploadAbortController = null;
+                }
+            }
+
+            if (ok > 0) {
+                await syncDocsFromServer();
+            }
+
+            renderShelfDocs();
+
+            if (canceled) {
+                const canceledCount = Math.max(0, files.length - completed);
+                toast(`⏹ 업로드 중단: 저장 ${ok}개, 취소 ${canceledCount}개`);
+            } else if (ok > 0) {
+                toast(`✅ 업로드 완료: ${ok}개 파일`);
+            }
+
+            if (failed > 0) {
+                const preview = failedReasons.slice(0, 2).join(' | ');
+                const suffix = failedReasons.length > 2 ? ` 외 ${failedReasons.length - 2}개` : '';
+                toast(`⚠️ 업로드 실패: ${failed}개 파일` + (preview ? ` (${preview}${suffix})` : ''));
+                console.warn('Upload failed details:', failedReasons);
+            }
+        } finally {
+            shelfUploadAbortController = null;
+            shelfUploadInProgress = false;
+            shelfUploadCancelRequested = false;
+            resetShelfUploadProgress();
+        }
+    }
+
+    function stopGeneration() {
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
+        }
+        isLoading = false;
+        document.getElementById('send-btn').disabled = false;
+        document.getElementById('stop-btn').style.display = 'none';
+        toast('⏹ 응답 중지됨');
+    }
+
+    function isDocumentIntent(text) {
+        const q = String(text || '').toLowerCase();
+        const keywords = [
+            '문서', '파일', '첨부', '업로드', 'pdf', '페이지', '쪽', '본문', '원문',
+            '가사', '요약', '정리', '출처', '근거', '텍스트 추출', '텍스트만', '전문', '다 뽑',
+            'document', 'file', 'upload', 'pdf', 'page', 'source', 'quote', 'lyrics',
+            'summarize', 'summary', 'extract', 'transcribe'
+        ];
+        return keywords.some(k => q.includes(k));
+    }
+
+    function isDocumentFollowup(text) {
+        const q = String(text || '').toLowerCase().trim();
+        const hints = ['그 부분', '위 내용', '방금', '그거', '거기', '다시', '이어', '계속'];
+        return q.length <= 20 && hints.some(k => q.includes(k));
+    }
+
+    function isGeneralChatOverride(text) {
+        const q = String(text || '').toLowerCase();
+        const keywords = [
+            '문서 말고', '파일 말고', '업로드 말고', '일반 대화', '새 주제', '주제 바꿔',
+            '그거 말고', '문서와 상관없이',
+            'not about file', 'ignore file', 'new topic', 'general chat'
+        ];
+        return keywords.some(k => q.includes(k));
+    }
+
+    function shouldUseUploadScope(chat, text) {
+        if (!uploadedDocs.length) return false;
+        if (isGeneralChatOverride(text)) return false;
+        if (isDocumentIntent(text)) return true;
+        if (chat.active_source || chat.active_doc_id) return true;
+        if (isDocumentFollowup(text)) return true;
+        return false;
+    }
+
+    async function sendMsg() {
+        if (isLoading) return;
+        const input = document.getElementById('msg-input');
+        const text = input.value.trim();
+        if (!text) return;
+
+        const welcome = document.getElementById('welcome');
+        if (welcome) welcome.remove();
+
+        const chat = ensureCurrentChat();
+        if (!chat) return;
+
+        if (chat.title === '새 채팅') {
+            chat.title = text.length > 20 ? text.slice(0, 20) + '…' : text;
+            document.getElementById('hdr-title').textContent = chat.title;
+            renderChatList();
+        }
+
+        input.value = '';
+        input.style.height = 'auto';
+
+        const uMsg = { sender: currentUser.id, text, isUser: true, hasScope: false };
+        chat.messages.push(uMsg);
+        saveChats();
+        renderMsg(uMsg.sender, uMsg.text, true, uMsg.hasScope, true);
+
+        const tid = showTyping();
+        isLoading = true;
+        document.getElementById('send-btn').disabled = true;
+        document.getElementById('stop-btn').style.display = 'flex';
+        abortController = new AbortController();
+
+        try {
+            const useUploadScope = shouldUseUploadScope(chat, text);
+            const payload = {
+                message: text,
+                system_prompt: systemPrompt,
+                history: buildHistoryForAPI(chat.messages.slice(0, -1)),
+                active_source: useUploadScope ? (chat.active_source || null) : null,
+                active_doc_id: useUploadScope ? (chat.active_doc_id || null) : null,
+                active_source_type: useUploadScope ? 'upload' : null,
+                web_search_enabled: true,
+                user_id: currentUser ? currentUser.id : null
+            };
+
+            const res = await fetch(API + '/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal: abortController.signal,
+                body: JSON.stringify(payload)
+            });
+
+            removeTyping(tid);
+
+            if (!res.ok) {
+                let detail = '';
+                try {
+                    const errPayload = await res.json();
+                    detail = String(errPayload.detail || errPayload.message || '').trim();
+                } catch {}
+                const suffix = detail ? (' | ' + detail) : '';
+                renderMsg('삼육재단AI', '⚠️ 서버 오류가 발생했습니다.' + suffix, false, false, true);
+            } else {
+                const d = await res.json();
+                const answer = d.answer || d.reply || '응답이 비어 있습니다.';
+
+                if (useUploadScope) {
+                    chat.active_source = d.active_source || chat.active_source || null;
+                    chat.active_doc_id = d.active_doc_id || chat.active_doc_id || null;
+                } else {
+                    chat.active_source = null;
+                    chat.active_doc_id = null;
+                }
+
+                const hasScope = !!(chat.active_source || chat.active_doc_id);
+                const aMsg = { sender: '삼육재단AI', text: answer, isUser: false, hasScope };
+                chat.messages.push(aMsg);
+                saveChats();
+                renderMsg(aMsg.sender, aMsg.text, false, hasScope, true);
+            }
+        } catch (err) {
+            removeTyping(tid);
+            if (err.name === 'AbortError') {
+                renderMsg('삼육재단AI', '⏹ 응답이 중지되었습니다.', false, false, true);
+            } else {
+                renderMsg('삼육재단AI', '⚠️ 서버에 연결할 수 없습니다.\n' + API + ' 확인하세요.', false, false, true);
+            }
+        }
+
+        isLoading = false;
+        document.getElementById('send-btn').disabled = false;
+        document.getElementById('stop-btn').style.display = 'none';
+        abortController = null;
+        input.focus();
+    }
+
+    function renderMsg(sender, text, isUser, hasScope, scroll) {
+        const msgs = document.getElementById('messages');
+        const g = document.createElement('div');
+        g.className = 'msg-group';
+        g.innerHTML = `
+            <div class="msg-meta">
+                <span class="msg-sender ${isUser ? '' : 'ai'}">${isUser ? esc(sender) : esc(sender)}</span>
+                <span class="msg-time">${now()}</span>
+                <button class="copy-btn" onclick="copyMsg(this)">복사</button>
+            </div>
+            <div class="msg-text ${isUser ? 'user' : ''}">${esc(text)}</div>`;
+        msgs.appendChild(g);
+        if (scroll) msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function copyMsg(btn) {
+        const text = btn.closest('.msg-group').querySelector('.msg-text').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            btn.textContent = '✅';
+            setTimeout(() => btn.textContent = '복사', 1500);
+        });
+    }
+
+    function showTyping() {
+        const msgs = document.getElementById('messages');
+        const id = 'tp' + Date.now();
+        const el = document.createElement('div');
+        el.id = id;
+        el.className = 'typing';
+        el.innerHTML = `<span class="typing-label">삼육재단AI</span>
+            <div class="dots"><span></span><span></span><span></span></div>`;
+        msgs.appendChild(el);
+        msgs.scrollTop = msgs.scrollHeight;
+        return id;
+    }
+
+    function removeTyping(id) {
+        const node = document.getElementById(id);
+        if (node) node.remove();
+    }
+
+    const ta = document.getElementById('msg-input');
+    ta.addEventListener('input', () => {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+    });
+    ta.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMsg();
+        }
+    });
+
+    renderShelfDocs();
+</script>
+</body>
+</html>

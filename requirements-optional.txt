@@ -1,0 +1,9 @@
+# Optional features for the modular chatbot.
+#
+# Install after the base environment if you want:
+# - reranking via FlagEmbedding
+# - live web search via Tavily
+
+FlagEmbedding>=1.2.0
+tavily-python>=0.3.0
+duckduckgo-search>=6.0.0

@@ -1,0 +1,7 @@
+<svg viewBox="0 0 180 95" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M6 12C34 13 52 24 66 48C80 72 103 83 145 81C120 93 87 91 63 79C39 67 28 42 18 27C12 19 9 15 6 12Z" fill="#0E6DC1"/>
+  <path d="M37 8C64 12 82 28 98 49C113 69 133 79 173 79C159 86 140 89 119 87C86 84 63 66 47 42C38 29 31 18 20 10C26 8 31 7 37 8Z" fill="#0E6DC1"/>
+  <circle cx="121" cy="36" r="27" fill="#16B394"/>
+  <text x="121" y="44" text-anchor="middle" font-family="Pretendard, sans-serif" font-size="24" font-weight="700" fill="#FFFFFF">SWF</text>
+  <circle cx="170" cy="36" r="8" fill="#0E6DC1"/>
+</svg>
