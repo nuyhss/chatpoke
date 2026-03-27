@@ -300,7 +300,6 @@
 
     const USERS = mergeUsers(JSON.parse(localStorage.getItem('ai_users') || 'null') || {});
 
-    const CHAT_KEY_PREFIX = 'ai_chats';
     const DOC_KEY_PREFIX = 'ai_uploaded_docs';
     const SYS_PROMPT_KEY_PREFIX = 'ai_sys_prompt';
     const CROSS_LOGIN_KEY = 'ai_cross_login';
@@ -413,9 +412,9 @@
         }
     }
 
-    function finishEmployeeLogin(id, u) {
+    async function finishEmployeeLogin(id, u) {
         currentUser = { id, role: u.role, department: u.department || '' };
-        loadUserState();
+        await loadUserState();
         document.getElementById('li-err').style.display = 'none';
         document.getElementById('li-err').textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
         document.getElementById('login-screen').style.display = 'none';
@@ -436,11 +435,58 @@
         return Promise.all([loadHealth(), syncDocsFromServer()]);
     }
 
-    function loadUserState() {
-        chats = normalizeChats(JSON.parse(localStorage.getItem(userScopedKey(CHAT_KEY_PREFIX)) || '[]'));
+    function uiChatsStateUrl() {
+        const query = new URLSearchParams();
+        if (currentUser?.id) query.set('user_id', currentUser.id);
+        return API + '/ui-state/chats' + (query.toString() ? ('?' + query.toString()) : '');
+    }
+
+    function serializeChatsForServer() {
+        return chats.reduce((acc, chat) => {
+            if (!chat || !chat.id) return acc;
+            acc[chat.id] = {
+                id: chat.id,
+                title: chat.title || '새 채팅',
+                active_source: chat.active_source || null,
+                active_doc_id: chat.active_doc_id || null,
+                messages: Array.isArray(chat.messages) ? chat.messages.map(msg => ({
+                    sender: msg.sender || '',
+                    text: msg.text || '',
+                    isUser: !!msg.isUser,
+                    hasScope: !!msg.hasScope
+                })) : []
+            };
+            return acc;
+        }, {});
+    }
+
+    function deserializeChatsFromServer(raw) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+        return normalizeChats(Object.values(raw)).sort((a, b) => {
+            const aId = Number(String(a.id || '').split('_')[1] || 0);
+            const bId = Number(String(b.id || '').split('_')[1] || 0);
+            return bId - aId;
+        });
+    }
+
+    async function loadUserState() {
+        chats = [];
         uploadedDocs = [];
         systemPrompt = localStorage.getItem(userScopedKey(SYS_PROMPT_KEY_PREFIX)) || DEFAULT_SYSTEM_PROMPT;
-        currentChatId = chats.length ? chats[0].id : null;
+        currentChatId = null;
+
+        try {
+            const response = await fetch(uiChatsStateUrl());
+            const payload = await response.json().catch(() => ({}));
+            if (response.ok) {
+                chats = deserializeChatsFromServer(payload.chats);
+                currentChatId = chats.length ? chats[0].id : null;
+                return;
+            }
+            console.warn('Failed to load server chat state:', payload.detail || response.statusText);
+        } catch (err) {
+            console.warn('Failed to load server chat state:', err);
+        }
     }
 
     function isEmployeeUser() {
@@ -455,7 +501,11 @@
 
     function saveChats() {
         if (!currentUser) return;
-        localStorage.setItem(userScopedKey(CHAT_KEY_PREFIX), JSON.stringify(chats));
+        fetch(uiChatsStateUrl(), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chats: serializeChatsForServer() })
+        }).catch(err => console.warn('Failed to save server chat state:', err));
     }
 
     function saveDocs() {

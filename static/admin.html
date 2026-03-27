@@ -162,7 +162,7 @@
         <section class="content-grid">
             <aside class="panel">
                 <div class="filter-group">
-                    <div class="panel-head"><h2>부서 필터</h2></div>
+                    <div class="panel-head"><h2>내 문서</h2></div>
                     <div class="panel-body"><div class="filter-list" id="department-filters"></div></div>
                 </div>
                 <div class="filter-group">
@@ -265,8 +265,8 @@
         let currentUser = null;
         let allDocuments = [];
         let selectedKeys = new Set();
-        let activeDepartmentFilter = DEPT_ALL;
-        let activeAccessFilter = "전체";
+        let activeDepartmentFilter = DEPT_MINE;
+        let activeAccessFilter = "";
         let serverAlerts = [];
         let clientAlerts = loadAlerts();
         let loginType = "admin";
@@ -385,8 +385,8 @@
             const query = document.getElementById("search-input").value.trim().toLowerCase();
             return allDocuments.filter(doc => {
                 const queryMatch = !query || String(doc.source || "").toLowerCase().includes(query);
-                const deptMatch = activeDepartmentFilter === DEPT_ALL || (activeDepartmentFilter === DEPT_MINE ? isMine(doc) : doc.department === activeDepartmentFilter);
-                const accessMatch = activeAccessFilter === "전체" || String(doc.department || "미지정") === activeAccessFilter;
+                const deptMatch = activeDepartmentFilter === DEPT_MINE ? isMine(doc) : true;
+                const accessMatch = !activeAccessFilter || String(doc.department || "미지정") === activeAccessFilter;
                 return queryMatch && deptMatch && accessMatch;
             });
         }
@@ -400,7 +400,6 @@
 
         function buildDepartmentItems() {
             return [
-                { key: DEPT_ALL, label: "전체 문서", count: allDocuments.length },
                 { key: DEPT_MINE, label: "내 문서", count: allDocuments.filter(isMine).length }
             ];
         }
@@ -408,7 +407,7 @@
         function buildAccessItems() {
             const counts = {};
             allDocuments.forEach(doc => { counts[doc.department || "미지정"] = (counts[doc.department || "미지정"] || 0) + 1; });
-            const items = [{ key: "전체", label: "전체", count: allDocuments.length }];
+            const items = [];
             ACCESS_ORDER.forEach(name => { if (counts[name]) items.push({ key: name, label: name, count: counts[name] }); });
             return items;
         }
@@ -770,7 +769,11 @@
         }
 
         function setDepartmentFilter(key) { activeDepartmentFilter = key; renderFilters(); renderDocuments(); }
-        function setAccessFilter(key) { activeAccessFilter = key; renderFilters(); renderDocuments(); }
+        function setAccessFilter(key) {
+            activeAccessFilter = activeAccessFilter === key ? "" : key;
+            renderFilters();
+            renderDocuments();
+        }
 
         bindEvents();
         setLoginType("admin");
