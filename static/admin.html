@@ -182,7 +182,7 @@
                             <div class="file-icon">📄</div>
                             <h3>파일을 드래그하거나 클릭해 업로드하세요</h3>
                             <p>관리자 페이지에서 업로드된 문서는 표와 필터에 바로 반영됩니다.</p>
-                            <div class="support-note">현재 연결된 백엔드 지원 형식: PDF, PNG, JPG, JPEG, WEBP</div>
+                            <div class="support-note">현재 연결된 백엔드 지원 형식: PDF, PNG, JPG, JPEG, WEBP · 한 번에 최대 10개</div>
                         </div>
                     </div>
                     <div class="upload-progress" id="upload-progress">
@@ -527,32 +527,45 @@
         async function uploadFiles(files) {
             const list = Array.from(files || []);
             if (!list.length) return;
+            if (list.length > 10) {
+                pushAlert("error", "한 번에 최대 10개 파일만 업로드할 수 있습니다.");
+                document.getElementById("file-input").value = "";
+                return;
+            }
             const department = document.getElementById("department-input").value || currentUser.department || "RD";
             document.getElementById("toolbar-upload-btn").disabled = true;
-            let completed = 0;
+            setProgress(0, list.length, `${department} 문서 업로드 준비 중`);
 
-            for (const file of list) {
-                setProgress(completed, list.length, `${file.name} 업로드 중`);
+            try {
                 const fd = new FormData();
-                fd.append("file", file);
+                list.forEach(file => fd.append("files", file));
                 fd.append("admin_id", currentUser.id);
                 fd.append("department", department);
-                const response = await fetch(API + "/admin/upload", { method: "POST", body: fd });
-                const data = await response.json().catch(() => ({}));
-                completed += 1;
-                if (!response.ok) {
-                    pushAlert("error", `${file.name} 업로드 실패: ${data.detail || "오류가 발생했습니다."}`);
-                    setProgress(completed, list.length, `${file.name} 업로드 실패`);
-                    continue;
-                }
-                setProgress(completed, list.length, `${file.name} 업로드 완료`);
-                pushAlert("success", `${file.name} 업로드 완료 (${data.chunks_stored || 0} chunks)`);
-            }
 
-            document.getElementById("toolbar-upload-btn").disabled = false;
-            document.getElementById("file-input").value = "";
-            clearProgress();
-            await loadDocuments();
+                const response = await fetch(API + "/admin/upload-multiple", { method: "POST", body: fd });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.detail || "오류가 발생했습니다.");
+                }
+
+                const results = Array.isArray(data.results) ? data.results : [];
+                const okCount = results.filter(item => item.status === "success").length;
+                const failedItems = results.filter(item => item.status !== "success");
+
+                setProgress(list.length, list.length, `${department} 업로드 완료`);
+                pushAlert("success", `${okCount}개 파일 업로드 완료`);
+                failedItems.forEach(item => {
+                    pushAlert("error", `${item.file || "파일"} 업로드 실패: ${item.reason || item.message || "오류가 발생했습니다."}`);
+                });
+
+                await loadDocuments();
+            } catch (error) {
+                pushAlert("error", `업로드 실패: ${error.message}`);
+            } finally {
+                document.getElementById("toolbar-upload-btn").disabled = false;
+                document.getElementById("file-input").value = "";
+                clearProgress();
+            }
         }
 
         async function requestDeleteDocument(docId, source, sourceType) {

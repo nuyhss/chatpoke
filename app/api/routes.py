@@ -491,6 +491,7 @@ def ingest(req: IngestRequest):
 
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 MAX_MULTI_UPLOAD_FILES = 90
+MAX_ADMIN_UPLOAD_FILES = 10
 
 
 @router.post("/admin/upload")
@@ -562,6 +563,83 @@ async def upload_department_document(
     except Exception as e:
         logger.exception("admin upload failed")
         raise HTTPException(status_code=500, detail=f"admin upload failed: {e}")
+
+
+@router.post("/admin/upload-multiple")
+async def upload_department_documents(
+    files: List[UploadFile] = File(...),
+    admin_id: Optional[str] = Form(default=None),
+    department: str = Form(...),
+):
+    normalized_department = _normalize_department(department)
+    if not normalized_department:
+        raise HTTPException(status_code=400, detail="유효한 부서 코드가 필요합니다.")
+
+    if len(files) > MAX_ADMIN_UPLOAD_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"한 번에 최대 {MAX_ADMIN_UPLOAD_FILES}개 파일만 업로드할 수 있습니다.",
+        )
+
+    target_dir = LIBRARY_DIR / normalized_department
+    target_dir.mkdir(parents=True, exist_ok=True)
+    normalized_admin_id = _normalize_user_id(admin_id)
+    results = []
+
+    for file in files:
+        safe_filename = Path(file.filename or "").name
+        if not safe_filename:
+            results.append({"file": file.filename or "", "status": "error", "reason": "유효한 파일명이 필요합니다."})
+            continue
+
+        ext = Path(safe_filename).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            results.append({"file": safe_filename, "status": "skipped", "reason": f"Unsupported: {ext}"})
+            continue
+
+        save_path = target_dir / safe_filename
+
+        try:
+            with open(save_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            suppress_watcher_for(save_path)
+
+            result = await run_in_threadpool(
+                ingest_single_file,
+                save_path,
+                normalized_admin_id,
+                normalized_department,
+            )
+
+            if result.get("doc_id"):
+                update_document(
+                    result["doc_id"],
+                    {
+                        "department": normalized_department,
+                        "uploader_id": normalized_admin_id,
+                    },
+                )
+
+            results.append({
+                "file": safe_filename,
+                "status": "success" if result.get("count", 0) > 0 else "failed",
+                "chunks": result.get("count", 0),
+                "message": result.get("message"),
+                "doc_id": result.get("doc_id"),
+                "department": normalized_department,
+                "source_type": result.get("source_type"),
+            })
+        except Exception as e:
+            logger.exception("admin multi upload failed for %s", safe_filename)
+            results.append({"file": safe_filename, "status": "error", "reason": str(e)})
+
+    total_chunks = sum(int(item.get("chunks", 0) or 0) for item in results)
+    return {
+        "message": f"Processed {len(results)} files, {total_chunks} total chunks stored.",
+        "results": results,
+        "department": normalized_department,
+    }
 
 @router.post("/upload")
 async def upload_file(
