@@ -191,7 +191,7 @@
     </div>
 </div>
 
-<div id="login-screen">
+<div id="login-screen" style="display:none;">
     <div class="login-card">
         <div class="login-logo">
 <img class="brand-mark login" src="/static/swf-logo.svg?v=2" alt="틸론AI 로고">
@@ -296,31 +296,10 @@
 <script>
     const API = window.location.origin;
 
-    const DEFAULT_USERS = {
-        'admin': { pw: 'admin123', role: '관리자', department: 'ALL' },
-        'rd': { pw: '123qwe', role: '직원', department: 'RD' },
-        'md': { pw: '123qwe', role: '직원', department: 'MD' },
-        'od': { pw: '123qwe', role: '직원', department: 'OD' }
-    };
-
-    function mergeUsers(raw) {
-        const merged = { ...DEFAULT_USERS };
-        Object.entries(raw || {}).forEach(([id, info]) => {
-            merged[id] = {
-                pw: info?.pw || '',
-                role: info?.role || '직원',
-                department: info?.department || (id === 'admin' ? 'ALL' : 'RD')
-            };
-        });
-        localStorage.setItem('ai_users', JSON.stringify(merged));
-        return merged;
-    }
-
-    const USERS = mergeUsers(JSON.parse(localStorage.getItem('ai_users') || 'null') || {});
-
     const DOC_KEY_PREFIX = 'ai_uploaded_docs';
     const SYS_PROMPT_KEY_PREFIX = 'ai_sys_prompt';
-    const CROSS_LOGIN_KEY = 'ai_cross_login';
+    const LOGIN_REDIRECT_KEY = 'tilon_login_redirect';
+    const ADMIN_ROLES = new Set(['adminD', 'admin']);
     const MAX_SHELF_FILES = 90;
     const HISTORY_MAX_MESSAGES = 12;
 
@@ -340,6 +319,31 @@
     let chatSearchQuery = '';
     let chatSearchMatches = [];
     let activeChatSearchIndex = -1;
+
+    async function readJsonSafe(response) {
+        try {
+            return await response.json();
+        } catch {
+            return {};
+        }
+    }
+
+    function showLoginError(message) {
+        const errorEl = document.getElementById('li-err');
+        errorEl.textContent = message || '로그인에 실패했습니다.';
+        errorEl.style.display = 'block';
+    }
+
+    async function fetchCurrentUser() {
+        try {
+            const response = await fetch(API + '/auth/me', { credentials: 'same-origin' });
+            if (!response.ok) return null;
+            const data = await readJsonSafe(response);
+            return data.user || null;
+        } catch {
+            return null;
+        }
+    }
 
     function setLoginType(type) {
         loginType = type === 'admin' ? 'admin' : 'employee';
@@ -521,34 +525,15 @@
         return currentUser ? `${prefix}:${currentUser.id}` : prefix;
     }
 
-    function queueCrossLogin(id, role, department, target) {
-        localStorage.setItem(CROSS_LOGIN_KEY, JSON.stringify({
-            id,
-            role,
-            department,
-            target,
-            ts: Date.now()
-        }));
-    }
-
-    function consumeCrossLogin(target) {
-        try {
-            const raw = JSON.parse(localStorage.getItem(CROSS_LOGIN_KEY) || 'null');
-            if (!raw || raw.target !== target) return null;
-            if (Date.now() - Number(raw.ts || 0) > 2 * 60 * 1000) {
-                localStorage.removeItem(CROSS_LOGIN_KEY);
-                return null;
-            }
-            localStorage.removeItem(CROSS_LOGIN_KEY);
-            return raw;
-        } catch {
-            localStorage.removeItem(CROSS_LOGIN_KEY);
-            return null;
-        }
-    }
-
-    async function finishEmployeeLogin(id, u) {
-        currentUser = { id, role: u.role, department: u.department || '' };
+    async function finishEmployeeLogin(user) {
+        currentUser = {
+            id: user.id || user.username,
+            username: user.username || user.id,
+            role: user.role,
+            department: user.department || ''
+        };
+        const id = currentUser.id;
+        const u = currentUser;
         await loadUserState();
         document.getElementById('li-err').style.display = 'none';
         document.getElementById('li-err').textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
@@ -571,9 +556,7 @@
     }
 
     function uiChatsStateUrl() {
-        const query = new URLSearchParams();
-        if (currentUser?.id) query.set('user_id', currentUser.id);
-        return API + '/ui-state/chats' + (query.toString() ? ('?' + query.toString()) : '');
+        return API + '/ui-state/chats';
     }
 
     function serializeChatsForServer() {
@@ -625,12 +608,19 @@
     }
 
     function isEmployeeUser() {
-        return currentUser?.role === '직원';
+        return true;
+    }
+
+    function roleDisplayLabel(role) {
+        if (role === 'adminD') return '최고 관리자';
+        if (role === 'admin') return '관리자';
+        if (role === 'user') return '사용자';
+        return role || '';
     }
 
     function refreshEmployeeAccessUI() {
         document.querySelectorAll('.employee-only').forEach(el => {
-            el.style.display = isEmployeeUser() ? 'none' : '';
+            el.style.display = 'none';
         });
     }
 
@@ -675,6 +665,37 @@
     async function doLogin() {
         const id = document.getElementById('li-id').value.trim();
         const pw = document.getElementById('li-pw').value;
+        try {
+            const response = await fetch(API + '/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    username: id,
+                    password: pw,
+                    login_type: loginType
+                })
+            });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                showLoginError(data.detail || '로그인에 실패했습니다.');
+                document.getElementById('li-pw').value = '';
+                return;
+            }
+
+            const user = data.user || {};
+            if (ADMIN_ROLES.has(user.role)) {
+                sessionStorage.setItem(LOGIN_REDIRECT_KEY, 'admin');
+                window.location.href = '/admin';
+                return;
+            }
+
+            await finishEmployeeLogin(user);
+            return;
+        } catch (err) {
+            showLoginError('로그인 중 오류가 발생했습니다.');
+            return;
+        }
         const u = USERS[id];
 
         if (!(u && u.pw === pw)) {
@@ -705,18 +726,61 @@
         await finishEmployeeLogin(id, u);
     }
 
-    function doLogout() {
+    async function doLogout() {
         if (shelfUploadInProgress) stopShelfUpload();
+        try {
+            await fetch(API + '/auth/logout', {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+        } catch {}
         currentUser = null;
         chats = [];
         uploadedDocs = [];
         currentChatId = null;
         systemPrompt = DEFAULT_SYSTEM_PROMPT;
         refreshEmployeeAccessUI();
-        document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app').style.display = 'none';
         document.getElementById('li-id').value = '';
         document.getElementById('li-pw').value = '';
+        window.location.replace('/chat/login');
+    }
+
+    async function finishEmployeeLogin(user) {
+        currentUser = {
+            id: user.id || user.username,
+            username: user.username || user.id,
+            role: user.role,
+            department: user.department || ''
+        };
+        const id = currentUser.id;
+        const u = currentUser;
+        document.getElementById('li-err').style.display = 'none';
+        document.getElementById('li-err').textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
+        document.getElementById('sb-user').textContent = u.department && u.department !== 'ALL' ? `${id} · ${u.department}` : id;
+        document.getElementById('u-name').textContent = id;
+        document.getElementById('u-role').textContent = u.department && u.department !== 'ALL' ? `${roleDisplayLabel(u.role)} · ${u.department}` : roleDisplayLabel(u.role);
+        document.getElementById('u-avatar').textContent = id[0].toUpperCase();
+        refreshEmployeeAccessUI();
+        document.getElementById('messages').innerHTML = '<div class="welcome" id="welcome"><h2>불러오는 중...</h2><p>채팅 내역과 문서 상태를 가져오고 있습니다.</p></div>';
+
+        try {
+            await loadUserState();
+            if (chats.length === 0) newChat();
+            else {
+                renderChatList();
+                loadChat(chats[0].id);
+            }
+            renderShelfDocs();
+        } catch (err) {
+            console.warn('Failed to finish employee login:', err);
+            newChat();
+        }
+
+        loadHealth().catch(() => {});
+        syncDocsFromServer().catch(() => {});
     }
 
     document.addEventListener('keydown', e => {
@@ -733,11 +797,12 @@
 
     setLoginType('employee');
     (async () => {
-        const pending = consumeCrossLogin('employee');
-        if (!pending) return;
-        const u = USERS[pending.id];
-        if (!u || u.role === '관리자') return;
-        await finishEmployeeLogin(pending.id, u);
+        const user = await fetchCurrentUser();
+        if (!user) {
+            window.location.replace('/chat/login');
+            return;
+        }
+        await finishEmployeeLogin(user);
     })();
 
     async function loadHealth() {
@@ -1270,9 +1335,9 @@
                 active_doc_id: useUploadScope ? (chat.active_doc_id || null) : null,
                 active_source_type: useUploadScope ? 'upload' : null,
                 web_search_enabled: true,
-                user_id: currentUser ? currentUser.id : null,
-                user_role: currentUser ? currentUser.role : null,
-                department: currentUser && currentUser.role === '직원' ? currentUser.department : null
+                // identity is resolved on the server session
+                user_role: undefined,
+                department: undefined
             };
 
             const res = await fetch(API + '/chat', {

@@ -109,7 +109,7 @@
     </style>
 </head>
 <body>
-    <div class="login-screen" id="login-screen">
+    <div class="login-screen" id="login-screen" style="display:none;">
         <div class="login-card">
             <div class="title-icon">🗂</div>
             <h1>통합 로그인</h1>
@@ -240,7 +240,7 @@
             <div class="modal-grid">
                 <div class="field"><label for="new-account-id">아이디</label><input id="new-account-id" type="text" placeholder="예: rd-team1"></div>
                 <div class="field"><label for="new-account-pw">비밀번호</label><input id="new-account-pw" type="password" placeholder="예: 123qwe"></div>
-                <div class="field"><label for="new-account-role">계정 유형</label><select id="new-account-role"><option>직원</option><option>관리자</option></select></div>
+                <div class="field"><label for="new-account-role">계정 유형</label><select id="new-account-role"><option value="user">사용자</option><option value="admin">관리자</option><option value="adminD">최고 관리자</option></select></div>
                 <div class="field"><label for="new-account-department">부서</label><select id="new-account-department"><option value="RD">RD</option><option value="MD">MD</option><option value="OD">OD</option><option value="ALL">ALL</option></select></div>
             </div>
             <div class="modal-actions"><button class="btn" type="button" data-close="accounts-modal">닫기</button><button class="btn primary" id="add-account-btn" type="button">계정 추가</button></div>
@@ -249,15 +249,9 @@
 
     <script>
         const API = window.location.origin;
-        const USERS_KEY = "ai_users";
         const ALERTS_KEY = "admin_ui_alerts";
-        const CROSS_LOGIN_KEY = "ai_cross_login";
-        const DEFAULT_USERS = {
-            admin: { pw: "admin123", role: "관리자", department: "ALL" },
-            rd: { pw: "123qwe", role: "직원", department: "RD" },
-            md: { pw: "123qwe", role: "직원", department: "MD" },
-            od: { pw: "123qwe", role: "직원", department: "OD" }
-        };
+        const LOGIN_REDIRECT_KEY = "tilon_login_redirect";
+        const ADMIN_ROLES = new Set(["adminD", "admin"]);
         const ACCESS_ORDER = ["RD", "MD", "OD"];
         const DEPT_ALL = "__all__";
         const DEPT_MINE = "__mine__";
@@ -270,31 +264,51 @@
         let serverAlerts = [];
         let clientAlerts = loadAlerts();
         let loginType = "admin";
+        let accountsCache = [];
+
+        async function readJsonSafe(response) {
+            try {
+                return await response.json();
+            } catch {
+                return {};
+            }
+        }
+
+        function showLoginError(message) {
+            const errorEl = document.getElementById("login-error");
+            errorEl.textContent = message || "로그인에 실패했습니다.";
+            errorEl.style.display = "block";
+        }
+
+        async function fetchCurrentUser() {
+            try {
+                const response = await fetch(API + "/auth/me", { credentials: "same-origin" });
+                if (!response.ok) return null;
+                const data = await readJsonSafe(response);
+                return data.user || null;
+            } catch {
+                return null;
+            }
+        }
+
+        function showLoginScreen() {
+            document.getElementById("app-shell").style.display = "none";
+            document.getElementById("login-screen").style.display = "grid";
+        }
 
         function esc(text) {
             return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
 
-        function mergeDefaultUsers(raw) {
-            const users = { ...DEFAULT_USERS };
-            Object.entries(raw || {}).forEach(([id, info]) => {
-                users[id] = {
-                    pw: info?.pw || "",
-                    role: info?.role || "직원",
-                    department: info?.department || (id === "admin" ? "ALL" : "RD")
-                };
-            });
-            return users;
+        function isAdminRole(role) {
+            return ADMIN_ROLES.has(role);
         }
 
-        function getUsers() {
-            const users = mergeDefaultUsers(JSON.parse(localStorage.getItem(USERS_KEY) || "null") || {});
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
-            return users;
-        }
-
-        function saveUsers(users) {
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        function roleDisplayLabel(role) {
+            if (role === "adminD") return "최고 관리자";
+            if (role === "admin") return "관리자";
+            if (role === "user") return "사용자";
+            return role || "";
         }
 
         function loadAlerts() {
@@ -304,32 +318,6 @@
 
         function saveAlerts() {
             localStorage.setItem(ALERTS_KEY, JSON.stringify(clientAlerts.slice(0, 30)));
-        }
-
-        function queueCrossLogin(id, role, department, target) {
-            localStorage.setItem(CROSS_LOGIN_KEY, JSON.stringify({
-                id,
-                role,
-                department,
-                target,
-                ts: Date.now()
-            }));
-        }
-
-        function consumeCrossLogin(target) {
-            try {
-                const raw = JSON.parse(localStorage.getItem(CROSS_LOGIN_KEY) || "null");
-                if (!raw || raw.target !== target) return null;
-                if (Date.now() - Number(raw.ts || 0) > 2 * 60 * 1000) {
-                    localStorage.removeItem(CROSS_LOGIN_KEY);
-                    return null;
-                }
-                localStorage.removeItem(CROSS_LOGIN_KEY);
-                return raw;
-            } catch {
-                localStorage.removeItem(CROSS_LOGIN_KEY);
-                return null;
-            }
         }
 
         function setLoginType(type) {
@@ -534,7 +522,6 @@
                 setProgress(completed, list.length, `${file.name} 업로드 중`);
                 const fd = new FormData();
                 fd.append("file", file);
-                fd.append("admin_id", currentUser.id);
                 fd.append("department", department);
                 const response = await fetch(API + "/admin/upload", { method: "POST", body: fd });
                 const data = await response.json().catch(() => ({}));
@@ -649,10 +636,10 @@
         function resetPasswordForAccount(id) {
             const users = getUsers();
             if (!users[id]) return;
-            users[id].pw = id === "admin" ? "admin123" : "123qwe";
+            users[id].pw = "";
             saveUsers(users);
             renderAccounts();
-            pushAlert("success", `${id} 계정 비밀번호를 ${id === "admin" ? "admin123" : "123qwe"}로 초기화했습니다.`);
+            pushAlert("success", `${id} 계정 비밀번호를 기본값으로 초기화했습니다.`);
         }
 
         function savePassword() {
@@ -699,7 +686,7 @@
                     return;
                 }
                 queueCrossLogin(id, user.role, user.department || "", "employee");
-                window.location.href = "/ui";
+                window.location.href = "/chat";
                 return;
             }
             if (user.role !== "관리자") {
@@ -727,7 +714,7 @@
             document.getElementById("search-input").addEventListener("input", renderDocuments);
             document.getElementById("toolbar-upload-btn").addEventListener("click", () => document.getElementById("file-input").click());
             document.getElementById("file-input").addEventListener("change", event => uploadFiles(event.target.files));
-            document.getElementById("go-chat-btn").addEventListener("click", () => { window.location.href = "/ui"; });
+            document.getElementById("go-chat-btn").addEventListener("click", () => { window.location.href = "/chat"; });
             document.getElementById("logout-btn").addEventListener("click", logout);
             document.getElementById("refresh-btn").addEventListener("click", loadDocuments);
             document.getElementById("delete-selected-btn").addEventListener("click", deleteSelectedDocuments);
@@ -736,7 +723,7 @@
             document.getElementById("save-password-btn").addEventListener("click", savePassword);
             document.getElementById("add-account-btn").addEventListener("click", addAccount);
             document.getElementById("new-account-role").addEventListener("change", event => {
-                document.getElementById("new-account-department").value = event.target.value === "관리자" ? "ALL" : "RD";
+                document.getElementById("new-account-department").value = isAdminRole(event.target.value) ? "ALL" : "RD";
             });
             document.getElementById("select-all").addEventListener("change", event => {
                 const docs = filteredDocuments();
@@ -762,15 +749,260 @@
             renderDocuments();
         }
 
+        async function loadAccounts() {
+            const response = await fetch(API + "/auth/users");
+            const data = await readJsonSafe(response);
+            if (!response.ok) throw new Error(data.detail || "계정 목록을 불러오지 못했습니다.");
+            accountsCache = Array.isArray(data.users) ? data.users : [];
+            return accountsCache;
+        }
+
+        async function renderAccounts() {
+            await loadAccounts();
+            const adminCount = accountsCache.filter(user => user.role === "관리자").length;
+            const list = document.getElementById("accounts-list");
+            list.innerHTML = accountsCache.map(user => `
+                <div class="account-row">
+                    <div><div class="account-name">${esc(user.username)}${currentUser?.id === user.username ? " · 현재 계정" : ""}</div><div class="account-meta">${esc(user.role || "직원")} · ${esc(user.department || "ALL")}</div></div>
+                    <div class="account-actions">
+                        <button class="mini-btn account-reset-btn" type="button" data-account-id="${encodeURIComponent(user.username)}">초기화</button>
+                        <button class="mini-btn account-delete-btn" type="button" data-account-id="${encodeURIComponent(user.username)}" ${user.role === "관리자" && adminCount <= 1 ? "disabled" : ""}>삭제</button>
+                    </div>
+                </div>
+            `).join("");
+            list.querySelectorAll(".account-reset-btn").forEach(button => {
+                button.addEventListener("click", () => resetPasswordForAccount(decodeURIComponent(button.dataset.accountId || "")));
+            });
+            list.querySelectorAll(".account-delete-btn").forEach(button => {
+                button.addEventListener("click", () => deleteAccount(decodeURIComponent(button.dataset.accountId || "")));
+            });
+        }
+
+        async function addAccount() {
+            const id = document.getElementById("new-account-id").value.trim();
+            const pw = document.getElementById("new-account-pw").value;
+            const role = document.getElementById("new-account-role").value;
+            const department = document.getElementById("new-account-department").value || (role === "관리자" ? "ALL" : "RD");
+            if (!id || !pw) { pushAlert("warning", "아이디와 비밀번호를 입력하세요."); return; }
+
+            const response = await fetch(API + "/auth/users", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: id, password: pw, role, department })
+            });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                pushAlert("warning", data.detail || "계정을 추가하지 못했습니다.");
+                return;
+            }
+
+            document.getElementById("new-account-id").value = "";
+            document.getElementById("new-account-pw").value = "";
+            document.getElementById("new-account-department").value = role === "관리자" ? "ALL" : "RD";
+            await renderAccounts();
+            pushAlert("success", `${id} 계정이 추가되었습니다.`);
+        }
+
+        async function deleteAccount(id) {
+            if (!confirm(`${id} 계정을 삭제할까요?`)) return;
+            const response = await fetch(API + `/auth/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                pushAlert("warning", data.detail || "계정을 삭제하지 못했습니다.");
+                return;
+            }
+            await renderAccounts();
+            pushAlert("success", `${id} 계정이 삭제되었습니다.`);
+        }
+
+        async function resetPasswordForAccount(id) {
+            const response = await fetch(API + `/auth/users/${encodeURIComponent(id)}/reset-password`, { method: "POST" });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                pushAlert("warning", data.detail || "비밀번호를 초기화하지 못했습니다.");
+                return;
+            }
+            await renderAccounts();
+            pushAlert("success", `${id} 계정 비밀번호를 ${data.password || "기본값"}로 초기화했습니다.`);
+        }
+
+        async function savePassword() {
+            const current = document.getElementById("current-password-input").value;
+            const next = document.getElementById("new-password-input").value;
+            const confirmValue = document.getElementById("confirm-password-input").value;
+            if (!next || next.length < 4) { pushAlert("warning", "새 비밀번호는 4자 이상으로 입력하세요."); return; }
+            if (next !== confirmValue) { pushAlert("warning", "새 비밀번호 확인이 일치하지 않습니다."); return; }
+
+            const response = await fetch(API + "/auth/change-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    current_password: current,
+                    new_password: next
+                })
+            });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                pushAlert("error", data.detail || "비밀번호를 변경하지 못했습니다.");
+                return;
+            }
+
+            document.getElementById("current-password-input").value = "";
+            document.getElementById("new-password-input").value = "";
+            document.getElementById("confirm-password-input").value = "";
+            closeModal("password-modal");
+            pushAlert("success", "비밀번호를 변경했습니다.");
+        }
+
+        async function finishAdminLogin(user) {
+            currentUser = {
+                id: user.id || user.username,
+                username: user.username || user.id,
+                role: user.role,
+                department: user.department || "ALL"
+            };
+            document.getElementById("login-error").style.display = "none";
+            document.getElementById("login-error").textContent = "아이디 또는 비밀번호가 올바르지 않습니다.";
+            document.getElementById("login-screen").style.display = "none";
+            document.getElementById("app-shell").style.display = "";
+            document.getElementById("current-user-chip").textContent = currentUser.department && currentUser.department !== "ALL" ? `${currentUser.id} · ${currentUser.department}` : currentUser.id;
+            document.getElementById("department-input").value = currentUser.department && currentUser.department !== "ALL" ? currentUser.department : "RD";
+            try {
+                await loadDocuments();
+            } catch (error) {
+                pushAlert("error", error?.message || "문서 목록을 불러오지 못했습니다.");
+            }
+        }
+
+        async function login() {
+            const id = document.getElementById("login-id").value.trim();
+            const pw = document.getElementById("login-pw").value;
+            const response = await fetch(API + "/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                    username: id,
+                    password: pw,
+                    login_type: loginType
+                })
+            });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                showLoginError(data.detail || "로그인에 실패했습니다.");
+                return;
+            }
+
+            const user = data.user || {};
+            if (isAdminRole(user.role)) {
+                await finishAdminLogin(user);
+                return;
+            }
+
+            sessionStorage.setItem(LOGIN_REDIRECT_KEY, "employee");
+            window.location.href = "/chat";
+        }
+
+        async function logout() {
+            try {
+                await fetch(API + "/auth/logout", {
+                    method: "POST",
+                    credentials: "same-origin"
+                });
+            } catch {}
+            currentUser = null;
+            selectedKeys.clear();
+            document.getElementById("login-id").value = "";
+            document.getElementById("login-pw").value = "";
+            window.location.replace("/login");
+        }
+
+        async function renderAccounts() {
+            await loadAccounts();
+            const adminCount = accountsCache.filter(user => isAdminRole(user.role)).length;
+            const list = document.getElementById("accounts-list");
+            list.innerHTML = accountsCache.map(user => `
+                <div class="account-row">
+                    <div><div class="account-name">${esc(user.username)}${currentUser?.id === user.username ? " · 현재 계정" : ""}</div><div class="account-meta">${esc(roleDisplayLabel(user.role))} · ${esc(user.department || "ALL")}</div></div>
+                    <div class="account-actions">
+                        <button class="mini-btn account-reset-btn" type="button" data-account-id="${encodeURIComponent(user.username)}">초기화</button>
+                        <button class="mini-btn account-delete-btn" type="button" data-account-id="${encodeURIComponent(user.username)}" ${isAdminRole(user.role) && adminCount <= 1 ? "disabled" : ""}>삭제</button>
+                    </div>
+                </div>
+            `).join("");
+            list.querySelectorAll(".account-reset-btn").forEach(button => {
+                button.addEventListener("click", () => resetPasswordForAccount(decodeURIComponent(button.dataset.accountId || "")));
+            });
+            list.querySelectorAll(".account-delete-btn").forEach(button => {
+                button.addEventListener("click", () => deleteAccount(decodeURIComponent(button.dataset.accountId || "")));
+            });
+        }
+
+        async function addAccount() {
+            const id = document.getElementById("new-account-id").value.trim();
+            const pw = document.getElementById("new-account-pw").value;
+            const role = document.getElementById("new-account-role").value;
+            const department = document.getElementById("new-account-department").value || (isAdminRole(role) ? "ALL" : "RD");
+            if (!id || !pw) { pushAlert("warning", "아이디와 비밀번호를 입력해주세요."); return; }
+
+            const response = await fetch(API + "/auth/users", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: id, password: pw, role, department })
+            });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                pushAlert("warning", data.detail || "계정을 추가하지 못했습니다.");
+                return;
+            }
+
+            document.getElementById("new-account-id").value = "";
+            document.getElementById("new-account-pw").value = "";
+            document.getElementById("new-account-department").value = isAdminRole(role) ? "ALL" : "RD";
+            await renderAccounts();
+            pushAlert("success", `${id} 계정을 추가했습니다.`);
+        }
+
+        function finishAdminLogin(user) {
+            currentUser = {
+                id: user.id || user.username,
+                username: user.username || user.id,
+                role: user.role,
+                department: user.department || "ALL"
+            };
+            document.getElementById("login-error").style.display = "none";
+            document.getElementById("login-error").textContent = "아이디 또는 비밀번호가 올바르지 않습니다.";
+            document.getElementById("login-screen").style.display = "none";
+            document.getElementById("app-shell").style.display = "";
+            document.getElementById("current-user-chip").textContent = currentUser.department && currentUser.department !== "ALL" ? `${currentUser.id} · ${currentUser.department}` : currentUser.id;
+            document.getElementById("department-input").value = currentUser.department && currentUser.department !== "ALL" ? currentUser.department : "RD";
+            allDocuments = [];
+            serverAlerts = [];
+            renderSummary({ indexing_status: "불러오는 중", total_documents: 0, pending_count: 0, queue_count: 0 });
+            renderFilters();
+            renderDocuments();
+            renderAlerts();
+            loadDocuments().catch(error => {
+                pushAlert("error", error?.message || "문서 목록을 불러오지 못했습니다.");
+            });
+        }
+
         bindEvents();
         setLoginType("admin");
         renderAlerts();
         (async () => {
-            const pending = consumeCrossLogin("admin");
-            if (!pending) return;
-            const user = getUsers()[pending.id];
-            if (!user || user.role !== "관리자") return;
-            await finishAdminLogin(pending.id, user);
+            const user = await fetchCurrentUser();
+            if (!user) {
+                window.location.replace("/login");
+                return;
+            }
+
+            if (isAdminRole(user.role)) {
+                await finishAdminLogin(user);
+                return;
+            }
+
+            window.location.replace("/chat");
         })();
         window.setDepartmentFilter = setDepartmentFilter;
         window.setAccessFilter = setAccessFilter;

@@ -1,16 +1,32 @@
 """
 Chat UI with model selector and chat history.
-Access at: http://localhost:8000/ui
+Access at: http://localhost:8000/chat
 """
 
 import logging
 from pathlib import Path
 from fastapi import APIRouter
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 logger = logging.getLogger("tilon.ui")
 router = APIRouter(tags=["Chat UI"])
 UI_INDEX_PATH = Path(__file__).resolve().parents[2] / "static" / "index.html"
+CHAT_LOGIN_UI_PATH = Path(__file__).resolve().parents[2] / "static" / "chat_login.html"
+
+
+def html_file_response(path: Path, not_found_message: str) -> HTMLResponse:
+    if not path.exists():
+        logger.warning(not_found_message, path)
+        return HTMLResponse(f"<h1>{path.name} not found</h1>", status_code=500)
+
+    return HTMLResponse(
+        path.read_text(encoding="utf-8"),
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 CHAT_UI_HTML = """
 <!DOCTYPE html>
@@ -1139,9 +1155,29 @@ chatInput.focus();
 </html>
 """
 
-@router.get("/ui", response_class=HTMLResponse)
+@router.get("/", include_in_schema=False)
+def root_redirect():
+    return RedirectResponse(url="/chat/login", status_code=307)
+
+
+@router.get("/chat/login", response_class=HTMLResponse)
+def chat_login_ui():
+    return html_file_response(CHAT_LOGIN_UI_PATH, "static chat login UI not found at %s")
+
+
+@router.get("/chat", response_class=HTMLResponse)
 def chat_ui():
     if UI_INDEX_PATH.exists():
-        return FileResponse(UI_INDEX_PATH)
+        return html_file_response(UI_INDEX_PATH, "static UI not found at %s")
     logger.warning("static UI not found at %s, serving embedded fallback UI", UI_INDEX_PATH)
     return HTMLResponse(CHAT_UI_HTML)
+
+
+@router.get("/login", include_in_schema=False)
+def legacy_login_redirect():
+    return RedirectResponse(url="/chat/login", status_code=307)
+
+
+@router.get("/ui", include_in_schema=False)
+def legacy_ui_redirect():
+    return RedirectResponse(url="/chat", status_code=307)

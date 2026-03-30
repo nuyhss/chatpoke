@@ -14,9 +14,10 @@ from pathlib import Path
 from threading import Lock
 from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Depends
 from starlette.concurrency import run_in_threadpool
 
+from app.api.deps import AuthUser, get_current_user, require_admin
 from app.config import (
     OLLAMA_MODEL,
     AVAILABLE_MODELS,
@@ -293,8 +294,8 @@ def list_models():
 # ── UI State (Chat History Persistence) ───────────────────────────────
 
 @router.get("/ui-state/chats")
-def get_ui_state_chats(user_id: Optional[str] = None):
-    state_path = _ui_chats_state_path(user_id)
+def get_ui_state_chats(current_user: AuthUser = Depends(get_current_user)):
+    state_path = _ui_chats_state_path(current_user.username)
 
     if not state_path.exists():
         return {"chats": {}}
@@ -316,13 +317,13 @@ def get_ui_state_chats(user_id: Optional[str] = None):
 @router.put("/ui-state/chats")
 def put_ui_state_chats(
     payload: dict = Body(...),
-    user_id: Optional[str] = None,
+    current_user: AuthUser = Depends(get_current_user),
 ):
     chats = payload.get("chats") if isinstance(payload, dict) else None
     if not isinstance(chats, dict):
         raise HTTPException(status_code=400, detail="'chats' must be an object.")
 
-    state_path = _ui_chats_state_path(user_id)
+    state_path = _ui_chats_state_path(current_user.username)
     doc = {"chats": chats}
 
     try:
@@ -349,7 +350,7 @@ def put_ui_state_chats(
 # ── Chat ───────────────────────────────────────────────────────────────
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, current_user: AuthUser = Depends(get_current_user)):
     """
     Main chat endpoint. No hardcoded modes — always searches for context,
     LLM decides how to respond. Works like a normal chatbot.
@@ -364,9 +365,9 @@ def chat(req: ChatRequest):
             active_source_type=req.active_source_type,
             system_prompt=req.system_prompt,
             web_search_enabled=req.web_search_enabled,
-            user_id=req.user_id,
-            user_role=req.user_role,
-            department=req.department,
+            user_id=current_user.username,
+            user_role=current_user.role,
+            department=current_user.department,
         )
 
         return ChatResponse(
@@ -394,7 +395,7 @@ async def chat_with_file(
     message: str = Form(default="이 문서의 내용을 요약해줘"),
     model: str = Form(default=None),
     web_search_enabled: bool = Form(default=True),
-    user_id: Optional[str] = Form(default=None),
+    current_user: AuthUser = Depends(require_admin),
 ):
     """
     Upload a file AND ask a question about it in one request.
@@ -406,7 +407,7 @@ async def chat_with_file(
         -F "message=이 문서의 주요 내용은?"
     """
     allowed_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
-    save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, user_id)
+    save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, current_user.username)
     ext = Path(safe_filename).suffix.lower()
 
     if ext not in allowed_extensions:
@@ -476,7 +477,7 @@ async def chat_with_file(
 # ── Ingest ─────────────────────────────────────────────────────────────
 
 @router.post("/ingest")
-def ingest(req: IngestRequest):
+def ingest(req: IngestRequest, _: AuthUser = Depends(require_admin)):
     folder = Path(req.folder_path) if req.folder_path else LIBRARY_DIR
 
     try:
@@ -496,8 +497,8 @@ MAX_MULTI_UPLOAD_FILES = 90
 @router.post("/admin/upload")
 async def upload_department_document(
     file: UploadFile = File(...),
-    admin_id: Optional[str] = Form(default=None),
     department: str = Form(...),
+    current_user: AuthUser = Depends(require_admin),
 ):
     normalized_department = _normalize_department(department)
     if not normalized_department:
@@ -517,7 +518,7 @@ async def upload_department_document(
     target_dir = LIBRARY_DIR / normalized_department
     target_dir.mkdir(parents=True, exist_ok=True)
     save_path = target_dir / safe_filename
-    normalized_admin_id = _normalize_user_id(admin_id)
+    normalized_admin_id = current_user.username
 
     try:
         with open(save_path, "wb") as f:
@@ -566,10 +567,10 @@ async def upload_department_document(
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    user_id: Optional[str] = Form(default=None),
     department: Optional[str] = Form(default=None),
     access_level: Optional[str] = Form(default=None),
     department_only: bool = Form(default=False),
+    current_user: AuthUser = Depends(require_admin),
 ):
     """
     Upload a file, parse it, chunk it, and store it in the vectorstore.
@@ -582,7 +583,7 @@ async def upload_file(
         curl -X POST http://localhost:8000/upload -F "file=@document.pdf"
     """
     # Validate file type
-    save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, user_id)
+    save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, current_user.username)
     ext = Path(safe_filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -642,10 +643,10 @@ async def upload_file(
 @router.post("/upload-multiple")
 async def upload_multiple_files(
     files: List[UploadFile] = File(...),
-    user_id: Optional[str] = Form(default=None),
     department: Optional[str] = Form(default=None),
     access_level: Optional[str] = Form(default=None),
     department_only: bool = Form(default=False),
+    current_user: AuthUser = Depends(require_admin),
 ):
     """Upload and ingest multiple files at once."""
     if len(files) > MAX_MULTI_UPLOAD_FILES:
@@ -663,7 +664,7 @@ async def upload_multiple_files(
             continue
 
         try:
-            save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, user_id)
+            save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, current_user.username)
             with open(save_path, "wb") as f:
                 content = await file.read()
                 f.write(content)
@@ -703,7 +704,7 @@ async def upload_multiple_files(
 # ── Reset DB ───────────────────────────────────────────────────────────
 
 @router.delete("/reset-db")
-def reset_db():
+def reset_db(_: AuthUser = Depends(require_admin)):
     try:
         reset_vectorstore()
         clear_document_registry()
@@ -715,7 +716,7 @@ def reset_db():
 # ── Document List ──────────────────────────────────────────────────────
 
 @router.get("/admin/documents")
-def admin_documents():
+def admin_documents(_: AuthUser = Depends(require_admin)):
     try:
         documents = [_build_admin_document_payload(entry) for entry in list_documents()]
         documents.sort(
@@ -764,9 +765,9 @@ def admin_documents():
 
 
 @router.get("/docs-list")
-def docs_list(user_id: Optional[str] = None):
+def docs_list(current_user: AuthUser = Depends(require_admin)):
     try:
-        normalized_user_id = _normalize_user_id(user_id)
+        normalized_user_id = current_user.username
         metadata_list = get_all_metadata(owner_id=normalized_user_id)
 
         unique_docs = {}
@@ -802,7 +803,7 @@ def docs_list(user_id: Optional[str] = None):
 def delete_upload_document(
     source: Optional[str] = None,
     doc_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    current_user: AuthUser = Depends(require_admin),
 ):
     """Delete one uploaded document from vectorstore/registry and remove local upload file."""
     try:
@@ -810,7 +811,7 @@ def delete_upload_document(
             source=source,
             doc_id=doc_id,
             source_type="upload",
-            owner_id=user_id,
+            owner_id=current_user.username,
         )
         result["message"] = "업로드 파일이 삭제되었습니다."
         return result
@@ -825,6 +826,7 @@ def delete_admin_document(
     source: Optional[str] = None,
     doc_id: Optional[str] = None,
     source_type: Optional[str] = None,
+    _: AuthUser = Depends(require_admin),
 ):
     try:
         return _delete_managed_document(source=source, doc_id=doc_id, source_type=source_type)
@@ -837,7 +839,7 @@ def delete_admin_document(
 # ── Keyword Count ──────────────────────────────────────────────────────
 
 @router.post("/count-keyword")
-def count_keyword(req: CountKeywordRequest):
+def count_keyword(req: CountKeywordRequest, _: AuthUser = Depends(get_current_user)):
     try:
         candidate_paths = [
             UPLOADS_DIR / req.filename,
@@ -876,6 +878,7 @@ async def upload_image(
     file: UploadFile = File(...),
     prompt: str = Form(default="이 이미지를 한국어로 자세히 설명해주세요."),
     model: Optional[str] = Form(default=None),
+    _: AuthUser = Depends(get_current_user),
 ):
     """Analyze a single image directly with the vision model."""
     try:
@@ -893,7 +896,7 @@ async def upload_image(
 
 
 @router.post("/stt")
-async def speech_to_text(file: UploadFile = File(...)):
+async def speech_to_text(file: UploadFile = File(...), _: AuthUser = Depends(get_current_user)):
     """Transcribe one uploaded audio file with Whisper."""
     try:
         content = await file.read()
@@ -917,6 +920,7 @@ async def chat_audio(
     active_source_type: Optional[str] = Form(default=None),
     system_prompt: Optional[str] = Form(default=None),
     web_search_enabled: bool = Form(default=True),
+    current_user: AuthUser = Depends(get_current_user),
 ):
     """Transcribe audio and pass the recognized text through the normal chat flow."""
     try:
@@ -930,6 +934,9 @@ async def chat_audio(
             active_source_type=active_source_type,
             system_prompt=system_prompt,
             web_search_enabled=web_search_enabled,
+            user_id=current_user.username,
+            user_role=current_user.role,
+            department=current_user.department,
         )
         return {
             "recognized_text": recognized_text,

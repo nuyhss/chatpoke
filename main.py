@@ -31,7 +31,9 @@ from app.config import (
 )
 from app.core.vectorstore import get_vectorstore
 from app.core.watcher import start_watcher, stop_watcher
+from app.core.auth_store import init_auth_store
 from app.pipeline.ingest import ingest_folder
+from app.api.auth import router as auth_router
 from app.api.routes import router as main_router
 from app.api.openai_compat import router as openai_router
 from app.api.upload_ui import router as ui_router
@@ -53,13 +55,17 @@ async def lifespan(app: FastAPI):
     logger.info("  Uploads dir   : %s", UPLOADS_DIR)
     logger.info("  Temp dir      : %s", TEMP_DIR)
     logger.info("  File watcher  : active (auto-ingests new files in data/library/)")
-    logger.info("  Chat UI       : http://localhost:8000/ui")
+    logger.info("  Chat Login    : http://localhost:8000/chat/login")
+    logger.info("  Chat Site     : http://localhost:8000/chat")
+    logger.info("  Files Login   : http://localhost:8000/files/login")
+    logger.info("  Files Site    : http://localhost:8000/files")
     logger.info("=" * 60)
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    init_auth_store()
 
     # Keep vectorstore initialization lazy so the UI can start even when
     # embedding models are not available yet or the machine is offline.
@@ -94,6 +100,7 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Mount routers
+app.include_router(auth_router)
 app.include_router(main_router)
 app.include_router(openai_router)
 app.include_router(ui_router)

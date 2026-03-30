@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>틸론AI 챗봇 로그인</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #f5f6f8; --bg2: #ffffff; --bg3: #f0f1f3; --border: #e2e8f0;
+            --accent: #2563eb; --accent2: #3b82f6; --tp: #1a1a2e; --ts: #64748b; --danger: #ef4444;
+        }
+        body {
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            background: linear-gradient(180deg, #f8fbff 0%, #eef3fb 100%);
+            color: var(--tp);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .login-card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 40px;
+            width: min(420px, 100%);
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+        }
+        .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+        .login-logo span { font-size: 24px; font-weight: 700; color: var(--tp); }
+        .brand-mark { width: 56px; height: auto; flex-shrink: 0; }
+        h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        p { font-size: 14px; line-height: 1.6; color: var(--ts); margin-bottom: 20px; }
+        .fg { margin-bottom: 14px; }
+        .fg label {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--ts);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+        .fg input {
+            width: 100%;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: var(--tp);
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+        }
+        .fg input:focus { border-color: var(--accent); }
+        .login-btn, .ghost-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 6px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .login-btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+        }
+        .login-btn:hover { background: var(--accent2); }
+        .ghost-btn {
+            background: #fff;
+            color: var(--ts);
+            border: 1px solid var(--border);
+            margin-top: 10px;
+        }
+        .ghost-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .login-err {
+            color: var(--danger);
+            font-size: 13px;
+            margin-top: 10px;
+            text-align: center;
+            display: none;
+        }
+        .muted {
+            margin-top: 14px;
+            font-size: 12px;
+            color: var(--ts);
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-logo">
+            <img class="brand-mark" src="/static/swf-logo.svg?v=2" alt="틸론AI 로고">
+            <span>틸론AI</span>
+        </div>
+        <h1>챗봇 로그인</h1>
+        <p>로그인 후 챗봇 사이트로 이동합니다.</p>
+        <div class="fg">
+            <label for="li-id">아이디</label>
+            <input type="text" id="li-id" placeholder="아이디를 입력하세요" autocomplete="username">
+        </div>
+        <div class="fg">
+            <label for="li-pw">비밀번호</label>
+            <input type="password" id="li-pw" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
+        </div>
+        <button class="login-btn" id="login-btn" type="button">챗봇 로그인</button>
+        <button class="ghost-btn" type="button" onclick="window.location.href='/files/login'">파일 업로드 사이트로 이동</button>
+        <div class="login-err" id="li-err">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+    </div>
+    <script>
+        const API = window.location.origin;
+
+        async function readJsonSafe(response) {
+            try {
+                return await response.json();
+            } catch {
+                return {};
+            }
+        }
+
+        function showLoginError(message) {
+            const errorEl = document.getElementById("li-err");
+            errorEl.textContent = message || "로그인에 실패했습니다.";
+            errorEl.style.display = "block";
+        }
+
+        async function doLogin() {
+            const id = document.getElementById("li-id").value.trim();
+            const pw = document.getElementById("li-pw").value;
+            const response = await fetch(API + "/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                    username: id,
+                    password: pw,
+                    login_type: "chat"
+                })
+            });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                showLoginError(data.detail || "로그인에 실패했습니다.");
+                document.getElementById("li-pw").value = "";
+                return;
+            }
+            window.location.replace("/chat");
+        }
+
+        document.getElementById("login-btn").addEventListener("click", doLogin);
+        document.getElementById("li-pw").addEventListener("keydown", event => {
+            if (event.key === "Enter") doLogin();
+        });
+    </script>
+</body>
+</html>

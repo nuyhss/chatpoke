@@ -20,6 +20,9 @@ data/uploads/*
 !data/uploads/.gitkeep
 data/temp/*
 !data/temp/.gitkeep
+data/ui_state/*
+!data/ui_state/.gitkeep
+data/auth.db
 data/document_registry.json
 *.gguf
 *.bin

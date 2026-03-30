@@ -789,7 +789,7 @@ def handle_chat(
         )
     )
     department_scope = None
-    if normalized_role == "직원" and normalized_department and not (scoped_source or scoped_doc_id or scoped_source_type == "upload"):
+    if normalized_role in {"user", "직원"} and normalized_department and not (scoped_source or scoped_doc_id or scoped_source_type == "upload"):
         department_scope = normalized_department
 
     retrieval = retrieve(
