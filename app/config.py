@@ -28,6 +28,9 @@ CHROMA_DIR = Path(os.getenv("CHROMA_DIR", BASE_DIR / "chroma_db"))
 DOCUMENT_REGISTRY_PATH = Path(
     os.getenv("DOCUMENT_REGISTRY_PATH", DATA_DIR / "document_registry.json")
 )
+UI_STATE_DB_PATH = Path(
+    os.getenv("UI_STATE_DB_PATH", DATA_DIR / "ui_state.db")
+)
 MARKER_OUTPUT_DIR = BASE_DIR / "marker_output"
 
 # ── Ollama / LLM ──────────────────────────────────────────────────────

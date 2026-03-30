@@ -17,7 +17,7 @@ import re
 from typing import List, Dict, Any, Optional
 
 from app.models.schemas import Message
-from app.core.llm import call_ollama, get_response_text
+from app.core.llm import call_ollama, get_response_metadata, get_response_text
 from app.core.web_search import format_search_results, search_web
 from app.retrieval.retriever import retrieve, format_context, extract_sources
 from app.core.vectorstore import get_documents_by_source, get_document_chunk_count
@@ -35,6 +35,18 @@ logger = logging.getLogger("tilon.chat")
 _HANGUL_RE = re.compile(r"[가-힣]")
 _CJK_HAN_RE = re.compile(r"[\u4e00-\u9fff]")
 _CJK_PUNCT_RE = re.compile(r"[，。！？；：、﹐﹒﹔﹕「」『』【】《》〈〉（）〔〕］［]")
+_TOPIC_PATTERN = re.compile(
+    r"([A-Za-z0-9가-힣·&().\-\s]{1,40}"
+    r"(?:교회|교단|성당|절|사찰|회사|기업|기관|문서|파일|학교|대학|병원))"
+)
+_TOPIC_ALIASES = {
+    "organization": ["이 교회", "그 교회", "이 교단", "그 교단", "이 단체", "그 단체"],
+    "company": ["이 회사", "그 회사", "이 기업", "그 기업"],
+    "document": ["이 문서", "그 문서", "이 파일", "그 파일", "해당 문서", "해당 파일"],
+    "person": ["이 사람", "그 사람", "이 인물", "그 인물"],
+}
+_DEICTIC_ALIASES = {alias for aliases in _TOPIC_ALIASES.values() for alias in aliases}
+_HISTORY_ROLES = {"system", "user", "assistant"}
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -180,6 +192,115 @@ def _normalize_for_match(text: str) -> str:
     text = re.sub(r"[^0-9a-z가-힣\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def _infer_topic_type(topic: Optional[str]) -> Optional[str]:
+    text = (topic or "").strip()
+    if not text:
+        return None
+    if any(text.endswith(suffix) for suffix in ("교회", "교단", "성당", "절", "사찰", "기관")):
+        return "organization"
+    if any(text.endswith(suffix) for suffix in ("회사", "기업")):
+        return "company"
+    if any(text.endswith(suffix) for suffix in ("문서", "파일")):
+        return "document"
+    if any(text.endswith(suffix) for suffix in ("씨", "님", "목사", "교수")):
+        return "person"
+    return None
+
+
+def _classify_user_intent(text: str) -> str:
+    lower = (text or "").lower()
+    if any(keyword in lower for keyword in ["역사", "연혁", "창립", "설립", "변천", "history"]):
+        return "역사 질문"
+    if any(keyword in lower for keyword in ["요약", "정리", "summary", "summarize"]):
+        return "요약 질문"
+    if any(keyword in lower for keyword in ["비교", "차이", "compare", "difference"]):
+        return "비교 질문"
+    if any(keyword in lower for keyword in ["교리", "입장", "belief", "doctrine"]):
+        return "교리 질문"
+    return "일반 질문"
+
+
+def _extract_topic_candidates(text: str) -> List[str]:
+    candidates: List[str] = []
+    for match in _TOPIC_PATTERN.findall(text or ""):
+        candidate = re.sub(r"\s+", " ", match).strip(" .,:;!?()[]{}")
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+    return sorted(candidates, key=len, reverse=True)
+
+
+def _normalize_aliases(aliases: List[str]) -> List[str]:
+    normalized: List[str] = []
+    seen = set()
+    for alias in aliases or []:
+        value = re.sub(r"\s+", " ", str(alias or "").strip())
+        if not value:
+            continue
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(value)
+    return normalized
+
+
+def _build_topic_aliases(topic: Optional[str], topic_type: Optional[str], aliases: List[str]) -> List[str]:
+    merged = _normalize_aliases(([topic] if topic else []) + list(aliases or []))
+    if topic_type in _TOPIC_ALIASES:
+        merged = _normalize_aliases(merged + _TOPIC_ALIASES[topic_type])
+    return merged
+
+
+def _resolve_query_with_topic(user_message: str, current_topic: Optional[str], aliases: List[str]) -> str:
+    resolved = str(user_message or "").strip()
+    if not resolved or not current_topic:
+        return resolved
+
+    for alias in sorted(_normalize_aliases(aliases), key=len, reverse=True):
+        if alias == current_topic:
+            continue
+        if alias in resolved:
+            resolved = resolved.replace(alias, current_topic)
+    return re.sub(r"\s+", " ", resolved).strip()
+
+
+def _derive_conversation_state(
+    user_message: str,
+    history: List[Message],
+    conversation_state: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    raw_state = conversation_state or {}
+    current_topic = str(raw_state.get("current_topic") or "").strip() or None
+    aliases = _normalize_aliases(raw_state.get("aliases") or [])
+    topic_type = str(raw_state.get("topic_type") or "").strip() or None
+
+    explicit_topics = [
+        candidate
+        for candidate in _extract_topic_candidates(user_message)
+        if candidate not in _DEICTIC_ALIASES
+    ]
+    if explicit_topics:
+        current_topic = explicit_topics[0]
+    elif not current_topic:
+        for msg in reversed(history[-8:]):
+            candidates = _extract_topic_candidates(msg.content)
+            if candidates:
+                current_topic = candidates[0]
+                break
+
+    topic_type = _infer_topic_type(current_topic) or topic_type
+    aliases = _build_topic_aliases(current_topic, topic_type, aliases)
+    resolved_query = _resolve_query_with_topic(user_message, current_topic, aliases)
+
+    return {
+        "current_topic": current_topic,
+        "aliases": aliases,
+        "last_user_intent": _classify_user_intent(user_message),
+        "last_resolved_query": resolved_query,
+        "topic_type": topic_type,
+    }
 
 
 def _list_uploaded_sources(owner_id: Optional[str] = None) -> List[str]:
@@ -353,9 +474,37 @@ def _should_force_small_doc_full_context(
 def _format_history(history: List[Message], max_turns: int = 8) -> str:
     if not history:
         return ""
+    filtered = [
+        msg for msg in history
+        if getattr(msg, "role", "") in _HISTORY_ROLES and str(getattr(msg, "content", "")).strip()
+    ]
     return "\n\n".join(
-        f"[{msg.role}]\n{msg.content}" for msg in history[-max_turns:]
+        f"[{msg.role}]\n{msg.content}" for msg in filtered[-max_turns:]
     )
+
+
+def _build_response_metadata(
+    *,
+    request_id: Optional[str] = None,
+    finish_reason: Optional[str] = None,
+    usage: Optional[Dict[str, Any]] = None,
+    prompt_capture: Optional[str] = None,
+    response_capture: Optional[str] = None,
+    resolved_query: Optional[str] = None,
+) -> Dict[str, Any]:
+    usage = usage or {}
+    return {
+        "request_id": request_id,
+        "finish_reason": finish_reason,
+        "usage": {
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+        },
+        "prompt_capture": prompt_capture,
+        "response_capture": response_capture,
+        "resolved_query": resolved_query,
+    }
 
 
 _SYSTEM_PROMPT = """You are Tilon AI, a helpful document-based chatbot.
@@ -370,7 +519,8 @@ CRITICAL RULES:
 7. Be concise and direct. Answer the question first, then explain if needed.
 8. When citing documents, mention the source naturally (e.g., "문서 3페이지에 따르면..." or "According to page 3...").
 9. If retrieved text includes Chinese characters, translate/paraphrase them into Korean or the user's language instead of copying Chinese characters.
-10. Do NOT use markdown emphasis symbols in the final answer (forbidden: **, __). Output plain text only."""
+10. Do NOT use markdown emphasis symbols in the final answer (forbidden: **, __). Output plain text only.
+11. Do NOT repeat the user's question verbatim at the beginning of the answer."""
 
 
 def _build_prompt(
@@ -379,6 +529,7 @@ def _build_prompt(
     doc_context: str = "",
     web_context: str = "",
     system_prompt: str = "",
+    resolved_query: str = "",
 ) -> str:
     """Build a single unified prompt with all available context."""
     parts = [f"[System]\n{system_prompt or _SYSTEM_PROMPT}"]
@@ -392,6 +543,9 @@ def _build_prompt(
 
     if web_context:
         parts.append(f"[Web search results]\n{web_context}")
+
+    if resolved_query and resolved_query.strip() and resolved_query.strip() != (user_message or "").strip():
+        parts.append(f"[Resolved user query]\n{resolved_query}")
 
     parts.append(f"[User message]\n{user_message}")
 
@@ -459,6 +613,37 @@ def _strip_markdown_emphasis(text: str) -> str:
     cleaned = cleaned.replace("__", "")
     cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", cleaned)
     return cleaned
+
+
+def _normalize_for_echo_check(text: str) -> str:
+    normalized = re.sub(r"\s+", " ", str(text or "")).strip().lower()
+    normalized = normalized.rstrip("?.!,:; ")
+    return normalized
+
+
+def _strip_question_echo(user_message: str, answer: str) -> str:
+    """Remove a leading line/paragraph that just repeats the user's question."""
+    text = (answer or "").strip()
+    if not text:
+        return text
+
+    target = _normalize_for_echo_check(user_message)
+    if not target:
+        return text
+
+    lines = text.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if lines and _normalize_for_echo_check(lines[0]) == target:
+        cleaned = "\n".join(lines[1:]).lstrip()
+        return cleaned or text
+
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+    if paragraphs and _normalize_for_echo_check(paragraphs[0]) == target:
+        cleaned = "\n\n".join(paragraphs[1:]).lstrip()
+        return cleaned or text
+
+    return text
 
 
 def _expects_korean_output(user_message: str) -> bool:
@@ -544,7 +729,7 @@ def _apply_language_guard(user_message: str, answer: str, model: str) -> str:
     expect_korean = _expects_korean_output(user_message)
 
     if not _needs_language_rewrite(user_message, answer):
-        return answer
+        return _strip_question_echo(user_message, answer)
 
     candidate = answer
     try:
@@ -560,7 +745,7 @@ def _apply_language_guard(user_message: str, answer: str, model: str) -> str:
             not_garbled = not _looks_garbled_output(candidate)
             if no_chinese and no_cjk_punct and not_garbled and (not expect_korean or has_korean):
                 logger.info("Applied strict language guard.")
-                return _strip_markdown_emphasis(candidate).strip()
+                return _strip_question_echo(user_message, _strip_markdown_emphasis(candidate).strip())
     except Exception as e:
         logger.warning("Strict language guard rewrite failed: %s", e)
 
@@ -579,7 +764,7 @@ def _apply_language_guard(user_message: str, answer: str, model: str) -> str:
                 cleaned = _strip_markdown_emphasis(cleaned).strip()
                 if cleaned and not _contains_chinese_chars(cleaned) and not _looks_garbled_output(cleaned):
                     logger.warning("Applied garbled-output cleanup rewrite in language guard.")
-                    return cleaned
+                    return _strip_question_echo(user_message, cleaned)
         except Exception as e:
             logger.warning("Garbled-output cleanup rewrite failed: %s", e)
 
@@ -593,15 +778,19 @@ def _apply_language_guard(user_message: str, answer: str, model: str) -> str:
                 translated = _strip_markdown_emphasis(translated).strip()
                 if not _contains_cjk_punctuation(translated) and not _looks_garbled_output(translated):
                     logger.warning("Applied Korean fallback translation in language guard.")
-                    return translated
+                    return _strip_question_echo(user_message, translated)
         except Exception as e:
             logger.warning("Korean fallback translation failed: %s", e)
 
         return "한국어로 답변하도록 재시도했지만 변환에 실패했습니다. 같은 질문을 다시 입력해 주세요."
 
-    if stripped:
+    if stripped and not _looks_garbled_output(stripped):
         logger.warning("Applied hard-strip fallback in language guard.")
-        return stripped
+        return _strip_question_echo(user_message, stripped)
+
+    if answer and not _looks_garbled_output(answer):
+        logger.warning("Language guard kept original answer to avoid garbled fallback.")
+        return _strip_question_echo(user_message, _strip_markdown_emphasis(answer).strip())
 
     return "언어 정책에 맞는 응답 생성에 실패했습니다. 같은 질문을 다시 시도해 주세요."
 
@@ -693,6 +882,7 @@ def handle_chat(
     user_id: str = None,
     user_role: str = None,
     department: str = None,
+    conversation_state: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """
     Unified chat handler — works like a normal chatbot.
@@ -709,6 +899,8 @@ def handle_chat(
     """
     history = history or []
     selected_model = model or OLLAMA_MODEL
+    derived_state = _derive_conversation_state(user_message, history, conversation_state)
+    resolved_query = derived_state.get("last_resolved_query") or user_message
     normalized_role = (user_role or "").strip()
     normalized_department = (department or "").strip() or None
     scoped_source = None if _is_smalltalk_query(user_message) else active_source
@@ -741,12 +933,19 @@ def handle_chat(
 
     if _is_direct_extraction_query(user_message) and not (scoped_source or scoped_doc_id) and scoped_source_type == "upload":
         upload_sources = _list_uploaded_sources(owner_id=user_id)
+        ambiguous_answer = _direct_extraction_ambiguous_answer(upload_sources)
         return {
-            "answer": _direct_extraction_ambiguous_answer(upload_sources),
+            "answer": ambiguous_answer,
             "sources": [],
             "mode": "ocr_extract",
             "active_source": active_source,
             "active_doc_id": active_doc_id,
+            "conversation_state": derived_state,
+            "response_metadata": _build_response_metadata(
+                finish_reason="stop",
+                response_capture=ambiguous_answer,
+                resolved_query=resolved_query,
+            ),
         }
 
     if (scoped_source or scoped_doc_id) and _is_direct_extraction_query(user_message):
@@ -775,6 +974,12 @@ def handle_chat(
                 "mode": "ocr_extract",
                 "active_source": scoped_source,
                 "active_doc_id": scoped_doc_id,
+                "conversation_state": derived_state,
+                "response_metadata": _build_response_metadata(
+                    finish_reason="stop",
+                    response_capture=extraction_answer,
+                    resolved_query=resolved_query,
+                ),
             }
 
     # ── Step 1: Always search for relevant document context ──
@@ -789,11 +994,11 @@ def handle_chat(
         )
     )
     department_scope = None
-    if normalized_role in {"user", "직원"} and normalized_department and not (scoped_source or scoped_doc_id or scoped_source_type == "upload"):
+    if normalized_role == "직원" and normalized_department and not (scoped_source or scoped_doc_id or scoped_source_type == "upload"):
         department_scope = normalized_department
 
     retrieval = retrieve(
-        user_message,
+        resolved_query,
         source_filter=scoped_source,
         doc_id_filter=scoped_doc_id,
         source_type_filter=scoped_source_type,
@@ -825,16 +1030,23 @@ def handle_chat(
 
             # Explicit per-file scope should remain strict.
             if has_explicit_scope:
+                not_found_answer = _document_not_found_answer(
+                    user_message,
+                    active_source or ("uploaded files" if active_source_type == "upload" else None),
+                    active_doc_id,
+                )
                 return {
-                    "answer": _document_not_found_answer(
-                        user_message,
-                        active_source or ("uploaded files" if active_source_type == "upload" else None),
-                        active_doc_id,
-                    ),
+                    "answer": not_found_answer,
                     "sources": [],
                     "mode": "document_qa",
                     "active_source": active_source,
                     "active_doc_id": active_doc_id,
+                    "conversation_state": derived_state,
+                    "response_metadata": _build_response_metadata(
+                        finish_reason="stop",
+                        response_capture=not_found_answer,
+                        resolved_query=resolved_query,
+                    ),
                 }
 
             # Source-type-only scope (e.g. all uploads) should stay flexible.
@@ -882,8 +1094,8 @@ def handle_chat(
         allow_web_search = False
 
     if allow_web_search:
-        if _might_need_web_search(user_message):
-            web_results = _search_web(user_message)
+        if _might_need_web_search(resolved_query):
+            web_results = _search_web(resolved_query)
             if web_results:
                 web_context = web_results
                 logger.info("Added web search results (toggle enabled)")
@@ -898,13 +1110,20 @@ def handle_chat(
         doc_context=doc_context,
         web_context=web_context,
         system_prompt=system_prompt,
+        resolved_query=resolved_query,
     )
 
     result = call_ollama(prompt, model=selected_model)
-    answer = get_response_text(result)
-    answer = _apply_language_guard(user_message, answer, selected_model)
+    raw_answer = get_response_text(result)
+    answer = _apply_language_guard(user_message, raw_answer, selected_model)
     answer = _apply_repetition_guard(user_message, answer, selected_model)
     answer = _strip_markdown_emphasis(answer)
+    response_metadata = _build_response_metadata(
+        **get_response_metadata(result),
+        prompt_capture=prompt,
+        response_capture=raw_answer,
+        resolved_query=resolved_query,
+    )
 
     # Determine what was used (for UI display)
     mode = "general"
@@ -929,4 +1148,6 @@ def handle_chat(
         "mode": mode,
         "active_source": resolved_active_source,
         "active_doc_id": resolved_active_doc_id,
+        "conversation_state": derived_state,
+        "response_metadata": response_metadata,
     }

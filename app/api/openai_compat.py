@@ -55,6 +55,12 @@ def list_models():
 @router.post("/chat/completions")
 def chat_completions(req: OpenAIChatRequest):
     try:
+        if req.stream:
+            raise HTTPException(
+                status_code=400,
+                detail="stream=true is not supported by this server yet. Use non-streaming requests.",
+            )
+
         system_prompt, history, user_message = _convert_openai_messages(req.messages)
         selected_model = req.model or OLLAMA_MODEL
 
@@ -64,9 +70,12 @@ def chat_completions(req: OpenAIChatRequest):
             model=selected_model,
             system_prompt=system_prompt,
         )
+        response_metadata = result.get("response_metadata") or {}
+        usage = response_metadata.get("usage") or {}
+        request_id = response_metadata.get("request_id") or uuid.uuid4().hex
 
         return {
-            "id": f"chatcmpl-{uuid.uuid4().hex}",
+            "id": f"chatcmpl-{request_id}",
             "object": "chat.completion",
             "created": int(time.time()),
             "model": selected_model,
@@ -74,10 +83,14 @@ def chat_completions(req: OpenAIChatRequest):
                 {
                     "index": 0,
                     "message": {"role": "assistant", "content": result["answer"]},
-                    "finish_reason": "stop",
+                    "finish_reason": response_metadata.get("finish_reason") or "stop",
                 }
             ],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            "usage": {
+                "prompt_tokens": usage.get("prompt_tokens") or 0,
+                "completion_tokens": usage.get("completion_tokens") or 0,
+                "total_tokens": usage.get("total_tokens") or 0,
+            },
         }
 
     except HTTPException:

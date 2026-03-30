@@ -11,6 +11,7 @@ IMPROVEMENTS over original:
 import logging
 import re
 import time
+import uuid
 from threading import BoundedSemaphore
 from typing import Dict, Any, Optional
 
@@ -115,6 +116,7 @@ def call_ollama(
     model = model or OLLAMA_MODEL
     temperature = temperature if temperature is not None else LLM_TEMPERATURE
     max_tokens = max_tokens or LLM_MAX_TOKENS
+    request_id = f"ollama-{uuid.uuid4().hex[:12]}"
 
     payload = {
         "model": model,
@@ -133,7 +135,12 @@ def call_ollama(
         try:
             _acquire_ollama_slot(model)
             try:
-                logger.debug("Ollama request (attempt %d) -> model=%s", attempt, model)
+                logger.debug(
+                    "Ollama request %s (attempt %d) -> model=%s",
+                    request_id,
+                    attempt,
+                    model,
+                )
                 response = requests.post(
                     f"{OLLAMA_BASE_URL}/generate",
                     json=payload,
@@ -157,6 +164,19 @@ def call_ollama(
                 _raise_ollama_http_error(response, model)
 
             data = response.json()
+            data["request_id"] = request_id
+            data["finish_reason"] = data.get("done_reason") or ("stop" if data.get("done") else None)
+            prompt_tokens = data.get("prompt_eval_count")
+            completion_tokens = data.get("eval_count")
+            data["usage"] = {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": (
+                    (prompt_tokens or 0) + (completion_tokens or 0)
+                    if prompt_tokens is not None or completion_tokens is not None
+                    else None
+                ),
+            }
             logger.debug("Ollama response received (%d chars)", len(data.get("response", "")))
             return data
 
@@ -190,3 +210,17 @@ def check_ollama_health() -> Dict[str, Any]:
 def get_response_text(ollama_result: Dict[str, Any]) -> str:
     """Extract and clean the response text from Ollama output."""
     return (ollama_result.get("response") or "").strip()
+
+
+def get_response_metadata(ollama_result: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract normalized metadata from an Ollama response payload."""
+    usage = ollama_result.get("usage") or {}
+    return {
+        "request_id": ollama_result.get("request_id"),
+        "finish_reason": ollama_result.get("finish_reason"),
+        "usage": {
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+        },
+    }

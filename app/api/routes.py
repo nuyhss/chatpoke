@@ -11,13 +11,11 @@ IMPROVEMENTS over original:
 import json
 import logging
 from pathlib import Path
-from threading import Lock
 from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body
 from starlette.concurrency import run_in_threadpool
 
-from app.api.deps import AuthUser, get_current_user, require_admin
 from app.config import (
     OLLAMA_MODEL,
     AVAILABLE_MODELS,
@@ -49,6 +47,7 @@ from app.core.document_registry import (
     remove_documents,
     update_document,
 )
+from app.core.ui_state_store import get_chats as get_ui_chats_from_store, save_chats as save_ui_chats_to_store
 from app.core.watcher import suppress_watcher_for
 from app.core.vectorstore import (
     get_vectorstore,
@@ -64,7 +63,6 @@ from app.pipeline.parser import extract_full_text
 logger = logging.getLogger("tilon.api")
 
 router = APIRouter()
-_ui_state_lock = Lock()
 
 
 def _normalize_user_id(user_id: Optional[str]) -> Optional[str]:
@@ -78,14 +76,6 @@ def _normalize_user_id(user_id: Optional[str]) -> Optional[str]:
     if not safe or safe in {".", ".."}:
         return None
     return safe
-
-
-def _ui_chats_state_path(user_id: Optional[str]) -> Path:
-    normalized_user_id = _normalize_user_id(user_id)
-    state_dir = DATA_DIR / "ui_state"
-    state_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"chats_{normalized_user_id}.json" if normalized_user_id else "chats_default.json"
-    return state_dir / filename
 
 
 def _resolve_upload_target(filename: str, user_id: Optional[str]) -> Tuple[Path, Optional[str], str]:
@@ -294,55 +284,33 @@ def list_models():
 # ── UI State (Chat History Persistence) ───────────────────────────────
 
 @router.get("/ui-state/chats")
-def get_ui_state_chats(current_user: AuthUser = Depends(get_current_user)):
-    state_path = _ui_chats_state_path(current_user.username)
-
-    if not state_path.exists():
-        return {"chats": {}}
-
-    with _ui_state_lock:
-        try:
-            payload = json.loads(state_path.read_text(encoding="utf-8"))
-        except Exception as e:
-            logger.warning("Failed to read UI chat state (%s): %s", state_path, e)
-            return {"chats": {}}
-
-    chats = payload.get("chats") if isinstance(payload, dict) else {}
-    if not isinstance(chats, dict):
-        chats = {}
-
+def get_ui_state_chats(user_id: Optional[str] = None):
+    chats = get_ui_chats_from_store(user_id=user_id)
     return {"chats": chats}
 
 
 @router.put("/ui-state/chats")
 def put_ui_state_chats(
     payload: dict = Body(...),
-    current_user: AuthUser = Depends(get_current_user),
+    user_id: Optional[str] = None,
 ):
     chats = payload.get("chats") if isinstance(payload, dict) else None
     if not isinstance(chats, dict):
         raise HTTPException(status_code=400, detail="'chats' must be an object.")
 
-    state_path = _ui_chats_state_path(current_user.username)
-    doc = {"chats": chats}
-
     try:
-        encoded = json.dumps(doc, ensure_ascii=False)
+        encoded = json.dumps(chats, ensure_ascii=False)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid chats payload: {e}")
 
     if len(encoded.encode("utf-8")) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Chat state payload too large.")
 
-    with _ui_state_lock:
-        try:
-            state_path.write_text(
-                json.dumps(doc, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-        except Exception as e:
-            logger.exception("Failed to write UI chat state (%s)", state_path)
-            raise HTTPException(status_code=500, detail=f"Failed to save UI chat state: {e}")
+    try:
+        save_ui_chats_to_store(chats, user_id=user_id)
+    except Exception as e:
+        logger.exception("Failed to save UI chat state for user_id=%s", user_id)
+        raise HTTPException(status_code=500, detail=f"Failed to save UI chat state: {e}")
 
     return {"saved": True, "count": len(chats)}
 
@@ -350,7 +318,7 @@ def put_ui_state_chats(
 # ── Chat ───────────────────────────────────────────────────────────────
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, current_user: AuthUser = Depends(get_current_user)):
+def chat(req: ChatRequest):
     """
     Main chat endpoint. No hardcoded modes — always searches for context,
     LLM decides how to respond. Works like a normal chatbot.
@@ -365,9 +333,10 @@ def chat(req: ChatRequest, current_user: AuthUser = Depends(get_current_user)):
             active_source_type=req.active_source_type,
             system_prompt=req.system_prompt,
             web_search_enabled=req.web_search_enabled,
-            user_id=current_user.username,
-            user_role=current_user.role,
-            department=current_user.department,
+            user_id=req.user_id,
+            user_role=req.user_role,
+            department=req.department,
+            conversation_state=req.conversation_state.model_dump() if req.conversation_state else None,
         )
 
         return ChatResponse(
@@ -377,6 +346,8 @@ def chat(req: ChatRequest, current_user: AuthUser = Depends(get_current_user)):
             mode=result.get("mode", "general"),
             active_source=result.get("active_source", req.active_source),
             active_doc_id=result.get("active_doc_id", req.active_doc_id),
+            conversation_state=result.get("conversation_state"),
+            response_metadata=result.get("response_metadata"),
             done=True,
         )
 
@@ -395,7 +366,7 @@ async def chat_with_file(
     message: str = Form(default="이 문서의 내용을 요약해줘"),
     model: str = Form(default=None),
     web_search_enabled: bool = Form(default=True),
-    current_user: AuthUser = Depends(require_admin),
+    user_id: Optional[str] = Form(default=None),
 ):
     """
     Upload a file AND ask a question about it in one request.
@@ -407,7 +378,7 @@ async def chat_with_file(
         -F "message=이 문서의 주요 내용은?"
     """
     allowed_extensions = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
-    save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, current_user.username)
+    save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, user_id)
     ext = Path(safe_filename).suffix.lower()
 
     if ext not in allowed_extensions:
@@ -477,7 +448,7 @@ async def chat_with_file(
 # ── Ingest ─────────────────────────────────────────────────────────────
 
 @router.post("/ingest")
-def ingest(req: IngestRequest, _: AuthUser = Depends(require_admin)):
+def ingest(req: IngestRequest):
     folder = Path(req.folder_path) if req.folder_path else LIBRARY_DIR
 
     try:
@@ -492,13 +463,14 @@ def ingest(req: IngestRequest, _: AuthUser = Depends(require_admin)):
 
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 MAX_MULTI_UPLOAD_FILES = 90
+MAX_ADMIN_UPLOAD_FILES = 10
 
 
 @router.post("/admin/upload")
 async def upload_department_document(
     file: UploadFile = File(...),
+    admin_id: Optional[str] = Form(default=None),
     department: str = Form(...),
-    current_user: AuthUser = Depends(require_admin),
 ):
     normalized_department = _normalize_department(department)
     if not normalized_department:
@@ -518,7 +490,7 @@ async def upload_department_document(
     target_dir = LIBRARY_DIR / normalized_department
     target_dir.mkdir(parents=True, exist_ok=True)
     save_path = target_dir / safe_filename
-    normalized_admin_id = current_user.username
+    normalized_admin_id = _normalize_user_id(admin_id)
 
     try:
         with open(save_path, "wb") as f:
@@ -564,13 +536,90 @@ async def upload_department_document(
         logger.exception("admin upload failed")
         raise HTTPException(status_code=500, detail=f"admin upload failed: {e}")
 
+
+@router.post("/admin/upload-multiple")
+async def upload_department_documents(
+    files: List[UploadFile] = File(...),
+    admin_id: Optional[str] = Form(default=None),
+    department: str = Form(...),
+):
+    normalized_department = _normalize_department(department)
+    if not normalized_department:
+        raise HTTPException(status_code=400, detail="유효한 부서 코드가 필요합니다.")
+
+    if len(files) > MAX_ADMIN_UPLOAD_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"한 번에 최대 {MAX_ADMIN_UPLOAD_FILES}개 파일만 업로드할 수 있습니다.",
+        )
+
+    target_dir = LIBRARY_DIR / normalized_department
+    target_dir.mkdir(parents=True, exist_ok=True)
+    normalized_admin_id = _normalize_user_id(admin_id)
+    results = []
+
+    for file in files:
+        safe_filename = Path(file.filename or "").name
+        if not safe_filename:
+            results.append({"file": file.filename or "", "status": "error", "reason": "유효한 파일명이 필요합니다."})
+            continue
+
+        ext = Path(safe_filename).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            results.append({"file": safe_filename, "status": "skipped", "reason": f"Unsupported: {ext}"})
+            continue
+
+        save_path = target_dir / safe_filename
+
+        try:
+            with open(save_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            suppress_watcher_for(save_path)
+
+            result = await run_in_threadpool(
+                ingest_single_file,
+                save_path,
+                normalized_admin_id,
+                normalized_department,
+            )
+
+            if result.get("doc_id"):
+                update_document(
+                    result["doc_id"],
+                    {
+                        "department": normalized_department,
+                        "uploader_id": normalized_admin_id,
+                    },
+                )
+
+            results.append({
+                "file": safe_filename,
+                "status": "success" if result.get("count", 0) > 0 else "failed",
+                "chunks": result.get("count", 0),
+                "message": result.get("message"),
+                "doc_id": result.get("doc_id"),
+                "department": normalized_department,
+                "source_type": result.get("source_type"),
+            })
+        except Exception as e:
+            logger.exception("admin multi upload failed for %s", safe_filename)
+            results.append({"file": safe_filename, "status": "error", "reason": str(e)})
+
+    total_chunks = sum(int(item.get("chunks", 0) or 0) for item in results)
+    return {
+        "message": f"Processed {len(results)} files, {total_chunks} total chunks stored.",
+        "results": results,
+        "department": normalized_department,
+    }
+
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    user_id: Optional[str] = Form(default=None),
     department: Optional[str] = Form(default=None),
     access_level: Optional[str] = Form(default=None),
     department_only: bool = Form(default=False),
-    current_user: AuthUser = Depends(require_admin),
 ):
     """
     Upload a file, parse it, chunk it, and store it in the vectorstore.
@@ -583,7 +632,7 @@ async def upload_file(
         curl -X POST http://localhost:8000/upload -F "file=@document.pdf"
     """
     # Validate file type
-    save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, current_user.username)
+    save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, user_id)
     ext = Path(safe_filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -643,10 +692,10 @@ async def upload_file(
 @router.post("/upload-multiple")
 async def upload_multiple_files(
     files: List[UploadFile] = File(...),
+    user_id: Optional[str] = Form(default=None),
     department: Optional[str] = Form(default=None),
     access_level: Optional[str] = Form(default=None),
     department_only: bool = Form(default=False),
-    current_user: AuthUser = Depends(require_admin),
 ):
     """Upload and ingest multiple files at once."""
     if len(files) > MAX_MULTI_UPLOAD_FILES:
@@ -664,7 +713,7 @@ async def upload_multiple_files(
             continue
 
         try:
-            save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, current_user.username)
+            save_path, normalized_user_id, safe_filename = _resolve_upload_target(file.filename, user_id)
             with open(save_path, "wb") as f:
                 content = await file.read()
                 f.write(content)
@@ -704,7 +753,7 @@ async def upload_multiple_files(
 # ── Reset DB ───────────────────────────────────────────────────────────
 
 @router.delete("/reset-db")
-def reset_db(_: AuthUser = Depends(require_admin)):
+def reset_db():
     try:
         reset_vectorstore()
         clear_document_registry()
@@ -716,7 +765,7 @@ def reset_db(_: AuthUser = Depends(require_admin)):
 # ── Document List ──────────────────────────────────────────────────────
 
 @router.get("/admin/documents")
-def admin_documents(_: AuthUser = Depends(require_admin)):
+def admin_documents():
     try:
         documents = [_build_admin_document_payload(entry) for entry in list_documents()]
         documents.sort(
@@ -765,9 +814,9 @@ def admin_documents(_: AuthUser = Depends(require_admin)):
 
 
 @router.get("/docs-list")
-def docs_list(current_user: AuthUser = Depends(require_admin)):
+def docs_list(user_id: Optional[str] = None):
     try:
-        normalized_user_id = current_user.username
+        normalized_user_id = _normalize_user_id(user_id)
         metadata_list = get_all_metadata(owner_id=normalized_user_id)
 
         unique_docs = {}
@@ -803,7 +852,7 @@ def docs_list(current_user: AuthUser = Depends(require_admin)):
 def delete_upload_document(
     source: Optional[str] = None,
     doc_id: Optional[str] = None,
-    current_user: AuthUser = Depends(require_admin),
+    user_id: Optional[str] = None,
 ):
     """Delete one uploaded document from vectorstore/registry and remove local upload file."""
     try:
@@ -811,7 +860,7 @@ def delete_upload_document(
             source=source,
             doc_id=doc_id,
             source_type="upload",
-            owner_id=current_user.username,
+            owner_id=user_id,
         )
         result["message"] = "업로드 파일이 삭제되었습니다."
         return result
@@ -826,7 +875,6 @@ def delete_admin_document(
     source: Optional[str] = None,
     doc_id: Optional[str] = None,
     source_type: Optional[str] = None,
-    _: AuthUser = Depends(require_admin),
 ):
     try:
         return _delete_managed_document(source=source, doc_id=doc_id, source_type=source_type)
@@ -839,7 +887,7 @@ def delete_admin_document(
 # ── Keyword Count ──────────────────────────────────────────────────────
 
 @router.post("/count-keyword")
-def count_keyword(req: CountKeywordRequest, _: AuthUser = Depends(get_current_user)):
+def count_keyword(req: CountKeywordRequest):
     try:
         candidate_paths = [
             UPLOADS_DIR / req.filename,
@@ -878,7 +926,6 @@ async def upload_image(
     file: UploadFile = File(...),
     prompt: str = Form(default="이 이미지를 한국어로 자세히 설명해주세요."),
     model: Optional[str] = Form(default=None),
-    _: AuthUser = Depends(get_current_user),
 ):
     """Analyze a single image directly with the vision model."""
     try:
@@ -896,7 +943,7 @@ async def upload_image(
 
 
 @router.post("/stt")
-async def speech_to_text(file: UploadFile = File(...), _: AuthUser = Depends(get_current_user)):
+async def speech_to_text(file: UploadFile = File(...)):
     """Transcribe one uploaded audio file with Whisper."""
     try:
         content = await file.read()
@@ -920,7 +967,6 @@ async def chat_audio(
     active_source_type: Optional[str] = Form(default=None),
     system_prompt: Optional[str] = Form(default=None),
     web_search_enabled: bool = Form(default=True),
-    current_user: AuthUser = Depends(get_current_user),
 ):
     """Transcribe audio and pass the recognized text through the normal chat flow."""
     try:
@@ -934,9 +980,6 @@ async def chat_audio(
             active_source_type=active_source_type,
             system_prompt=system_prompt,
             web_search_enabled=web_search_enabled,
-            user_id=current_user.username,
-            user_role=current_user.role,
-            department=current_user.department,
         )
         return {
             "recognized_text": recognized_text,
@@ -945,6 +988,7 @@ async def chat_audio(
             "mode": result.get("mode", "general"),
             "active_source": result.get("active_source", active_source),
             "active_doc_id": result.get("active_doc_id", active_doc_id),
+            "response_metadata": result.get("response_metadata"),
             "model": model or OLLAMA_MODEL,
             "done": True,
         }

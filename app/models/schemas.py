@@ -14,8 +14,16 @@ from pydantic import BaseModel, Field
 # ── Chat ───────────────────────────────────────────────────────────────
 
 class Message(BaseModel):
-    role: Literal["system", "user", "assistant"]
+    role: Literal["system", "user", "assistant", "error", "stopped"]
     content: str
+
+
+class ConversationState(BaseModel):
+    current_topic: Optional[str] = None
+    aliases: List[str] = Field(default_factory=list)
+    last_user_intent: Optional[str] = None
+    last_resolved_query: Optional[str] = None
+    topic_type: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -34,6 +42,7 @@ class ChatRequest(BaseModel):
     user_id: Optional[str] = None
     user_role: Optional[str] = None
     department: Optional[str] = None
+    conversation_state: Optional[ConversationState] = None
 
 
 class SourceInfo(BaseModel):
@@ -48,6 +57,21 @@ class SourceInfo(BaseModel):
     extraction_method: Optional[str] = None
 
 
+class TokenUsage(BaseModel):
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+
+
+class ResponseMetadata(BaseModel):
+    request_id: Optional[str] = None
+    finish_reason: Optional[str] = None
+    usage: TokenUsage = Field(default_factory=TokenUsage)
+    prompt_capture: Optional[str] = None
+    response_capture: Optional[str] = None
+    resolved_query: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     model: str
     answer: str
@@ -55,6 +79,8 @@ class ChatResponse(BaseModel):
     mode: str
     active_source: Optional[str] = None
     active_doc_id: Optional[str] = None
+    conversation_state: Optional[ConversationState] = None
+    response_metadata: Optional[ResponseMetadata] = None
     done: bool = True
 
 
