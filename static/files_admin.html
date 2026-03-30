@@ -245,7 +245,7 @@
             font-weight: 600;
             color: var(--muted);
         }
-        .field select, .field input[type="file"] {
+        .field select {
             width: 100%;
             padding: 14px 16px;
             border-radius: 16px;
@@ -253,6 +253,55 @@
             background: #fff;
             font: inherit;
             color: var(--text);
+        }
+        .file-input-native {
+            display: none;
+        }
+        .file-picker {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            border: 1px solid var(--line-strong);
+            background: linear-gradient(180deg, #ffffff, #f7faff);
+            cursor: pointer;
+            transition: .18s ease;
+        }
+        .file-picker:hover {
+            border-color: var(--brand);
+            box-shadow: 0 10px 22px rgba(47,102,234,.08);
+        }
+        .file-picker-copy {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+        }
+        .file-picker-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .file-picker-name {
+            font-size: 13px;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-picker-btn {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 104px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(47,102,234,.10);
+            color: var(--brand);
+            font-size: 13px;
+            font-weight: 600;
         }
         .dept-picker {
             display: flex;
@@ -273,6 +322,9 @@
             color: var(--text);
             font-size: 14px;
             font-weight: 500;
+        }
+        .dept-scope-field.hidden {
+            display: none;
         }
         .dept-option input {
             accent-color: var(--brand);
@@ -530,22 +582,23 @@
                     <p style="color:var(--muted);line-height:1.7;margin-top:8px;">업로드 대상 부서와 공개 범위를 함께 지정할 수 있습니다. `private`를 고르면 보여줄 부서를 여러 개 선택할 수 있어요.</p>
                     <div class="upload-grid">
                         <div class="field">
-                            <label for="upload-department">업로드 대상 부서</label>
-                            <select id="upload-department">
-                                <option value="RD">RD</option>
-                                <option value="OD">OD</option>
-                                <option value="MD">MD</option>
-                                <option value="ED">ED</option>
-                            </select>
-                        </div>
-                        <div class="field">
                             <label for="upload-visibility">공개 범위</label>
                             <select id="upload-visibility">
                                 <option value="public">public</option>
                                 <option value="private">private</option>
                             </select>
                         </div>
-                        <div class="field" style="grid-column:1 / -1;">
+                        <div class="field">
+                            <label for="upload-department">업로드 대상 부서</label>
+                            <select id="upload-department">
+                                <option value="ALL">전체</option>
+                                <option value="RD">RD</option>
+                                <option value="OD">OD</option>
+                                <option value="MD">MD</option>
+                                <option value="ED">ED</option>
+                            </select>
+                        </div>
+                        <div class="field dept-scope-field" id="dept-scope-field" style="grid-column:1 / -1;">
                             <label>조회 가능한 부서</label>
                             <div id="visible-departments" class="dept-picker">
                                 <label class="dept-option"><input type="checkbox" value="RD"> RD</label>
@@ -556,11 +609,18 @@
                         </div>
                         <div class="field" style="grid-column:1 / -1;">
                             <label for="upload-file">업로드 파일</label>
-                            <input id="upload-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp">
+                            <input id="upload-file" class="file-input-native" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp">
+                            <label for="upload-file" class="file-picker">
+                                <div class="file-picker-copy">
+                                    <span class="file-picker-title">업로드할 파일 선택</span>
+                                    <span class="file-picker-name" id="upload-file-name"></span>
+                                </div>
+                                <span class="file-picker-btn">파일 선택</span>
+                            </label>
                         </div>
                     </div>
                     <div class="upload-actions">
-                        <div class="upload-note">public은 전체 부서가 볼 수 있고, private은 선택한 부서만 볼 수 있도록 저장됩니다.</div>
+                        <div class="upload-note"></div>
                         <button class="btn primary" type="button" id="upload-submit-btn">문서 업로드</button>
                     </div>
                 </section>
@@ -685,9 +745,30 @@
             return Array.from(document.querySelectorAll('#visible-departments input:checked')).map(input => input.value);
         }
 
+        function updateSelectedFileName() {
+            const input = document.getElementById("upload-file");
+            const label = document.getElementById("upload-file-name");
+            const file = input.files && input.files[0];
+            label.textContent = file ? file.name : "";
+        }
+
         function syncVisibilityControls() {
-            const visibility = document.getElementById("upload-visibility").value;
+            const departmentSelect = document.getElementById("upload-department");
+            const visibilitySelect = document.getElementById("upload-visibility");
+            const scopeField = document.getElementById("dept-scope-field");
             const picker = document.getElementById("visible-departments");
+            const visibility = visibilitySelect.value;
+
+            if (visibility === "public") {
+                departmentSelect.value = "ALL";
+                departmentSelect.disabled = true;
+                scopeField.classList.add("hidden");
+            } else {
+                departmentSelect.disabled = true;
+                departmentSelect.value = "ALL";
+                scopeField.classList.remove("hidden");
+            }
+
             picker.style.opacity = visibility === "private" ? "1" : ".55";
             picker.querySelectorAll("input").forEach(input => {
                 input.disabled = visibility !== "private";
@@ -932,7 +1013,7 @@
                 pushAlert("warning", "업로드할 파일을 먼저 선택해 주세요.");
                 return;
             }
-            if (!DEPARTMENTS.includes(department)) {
+            if (!(DEPARTMENTS.includes(department) || department === "ALL")) {
                 pushAlert("warning", "업로드 대상 부서를 선택해 주세요.");
                 return;
             }
@@ -964,6 +1045,7 @@
             }
 
             fileInput.value = "";
+            updateSelectedFileName();
             syncVisibilityControls();
             pushAlert("success", `${data.filename || "문서"} 업로드 완료 · ${visibility}${visibility === "private" ? ` · ${visibleDepartments.join(", ")}` : ""}`);
             await loadDocuments();
@@ -993,6 +1075,8 @@
         document.getElementById("refresh-btn").addEventListener("click", loadDocuments);
         document.getElementById("upload-submit-btn").addEventListener("click", uploadAdminDocument);
         document.getElementById("upload-visibility").addEventListener("change", syncVisibilityControls);
+        document.getElementById("upload-department").addEventListener("change", syncVisibilityControls);
+        document.getElementById("upload-file").addEventListener("change", updateSelectedFileName);
         document.getElementById("clear-selection-btn").addEventListener("click", () => {
             selectedIds.clear();
             renderDocumentLists();
