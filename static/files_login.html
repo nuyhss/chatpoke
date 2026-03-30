@@ -144,7 +144,9 @@
                 document.getElementById("li-pw").value = "";
                 return;
             }
-            window.location.replace("/files");
+            const role = data.user?.role || "";
+            const nextPath = role === "adminD" || role === "admin" ? "/files/admin" : "/files/user";
+            window.location.replace(nextPath);
         }
 
         document.getElementById("login-btn").addEventListener("click", doLogin);
