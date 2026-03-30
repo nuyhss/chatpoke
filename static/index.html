@@ -20,9 +20,20 @@
         .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 48px 40px; width: 400px; box-shadow: 0 8px 40px rgba(0,0,0,.10); }
         .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
         .login-logo span { font-size: 20px; font-weight: 700; color: var(--tp); }
-        .brand-mark { display: block; height: auto; flex-shrink: 0; }
+        .brand-mark {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 3px;
+            aspect-ratio: 1;
+            flex-shrink: 0;
+        }
         .brand-mark.login { width: 56px; }
         .brand-mark.sidebar { width: 40px; margin-right: 8px; }
+        .brand-mark span { display: block; width: 100%; height: 100%; border-radius: 50%; }
+        .brand-mark .mk1 { background: radial-gradient(circle at 38% 36%, #ee7d32 0%, #D44516 72%); }
+        .brand-mark .mk2 { background: radial-gradient(circle at 38% 36%, #ffe46a 0%, #F5BE1C 72%); }
+        .brand-mark .mk3 { background: radial-gradient(circle at 38% 36%, #2c8bd1 0%, #015086 72%); }
+        .brand-mark .mk4 { background: radial-gradient(circle at 38% 36%, #2ca85b 0%, #0E7A3B 72%); }
         .login-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
         .login-card p { font-size: 14px; color: var(--ts); margin-bottom: 28px; }
         .fg { margin-bottom: 16px; }
@@ -184,30 +195,12 @@
 <div id="login-screen">
     <div class="login-card">
         <div class="login-logo">
-<svg class="brand-mark login" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="틸론AI 4색 로고" role="img">
-<path d="M236.267 472.64C366.827 472.64 472.533 366.827 472.533 236.373C472.533 105.92 366.827 0 236.267 0C105.707 0 0 105.813 0 236.267C0 366.72 105.813 472.533 236.267 472.533V472.64Z" fill="url(#login-paint0_radial_67_2)"/>
-<path d="M787.733 472.64C918.293 472.64 1024 366.827 1024 236.373C1024 105.92 918.187 0 787.733 0C657.28 0 551.467 105.813 551.467 236.267C551.467 366.72 657.28 472.533 787.733 472.533V472.64Z" fill="url(#login-paint1_radial_67_2)"/>
-<path d="M236.267 1024C366.827 1024 472.533 918.186 472.533 787.733C472.533 657.28 366.72 551.467 236.267 551.467C105.813 551.467 0 657.173 0 787.733C0 918.293 105.813 1024 236.267 1024Z" fill="url(#login-paint2_radial_67_2)"/>
-<path d="M787.733 1024C918.293 1024 1024 918.186 1024 787.733C1024 657.28 918.187 551.467 787.733 551.467C657.28 551.467 551.467 657.28 551.467 787.733C551.467 918.186 657.28 1024 787.733 1024Z" fill="url(#login-paint3_radial_67_2)"/>
-<defs>
-<radialGradient id="login-paint0_radial_67_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(245.795 216.52) rotate(90) scale(235.267 235.267)">
-<stop offset="0.5" stop-color="#E05C10"/>
-<stop offset="1" stop-color="#D44516"/>
-</radialGradient>
-<radialGradient id="login-paint1_radial_67_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(798.554 216.52) rotate(90) scale(235.267 235.267)">
-<stop offset="0.5" stop-color="#F3D623"/>
-<stop offset="1" stop-color="#F5BE1C"/>
-</radialGradient>
-<radialGradient id="login-paint2_radial_67_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(245.795 770.559) rotate(90) scale(235.267 235.267)">
-<stop offset="0.5" stop-color="#0767AD"/>
-<stop offset="1" stop-color="#015086"/>
-</radialGradient>
-<radialGradient id="login-paint3_radial_67_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(799.727 769.279) rotate(90) scale(235.267 235.267)">
-<stop offset="0.5" stop-color="#0E8C41"/>
-<stop offset="1" stop-color="#0E7A3B"/>
-</radialGradient>
-</defs>
-</svg>
+<div class="brand-mark login" aria-label="틸론AI 4색 로고" role="img">
+    <span class="mk1"></span>
+    <span class="mk2"></span>
+    <span class="mk3"></span>
+    <span class="mk4"></span>
+</div>
             <span>틸론AI</span>
         </div>
         <h2>로그인</h2>
@@ -227,30 +220,12 @@
     <div class="sidebar">
         <div class="sb-header">
             <div class="ws-name">
-<svg class="brand-mark sidebar" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="틸론AI 4색 로고" role="img">
-<path d="M236.267 472.64C366.827 472.64 472.533 366.827 472.533 236.373C472.533 105.92 366.827 0 236.267 0C105.707 0 0 105.813 0 236.267C0 366.72 105.813 472.533 236.267 472.533V472.64Z" fill="url(#sidebar-paint0_radial_67_2)"/>
-<path d="M787.733 472.64C918.293 472.64 1024 366.827 1024 236.373C1024 105.92 918.187 0 787.733 0C657.28 0 551.467 105.813 551.467 236.267C551.467 366.72 657.28 472.533 787.733 472.533V472.64Z" fill="url(#sidebar-paint1_radial_67_2)"/>
-<path d="M236.267 1024C366.827 1024 472.533 918.186 472.533 787.733C472.533 657.28 366.72 551.467 236.267 551.467C105.813 551.467 0 657.173 0 787.733C0 918.293 105.813 1024 236.267 1024Z" fill="url(#sidebar-paint2_radial_67_2)"/>
-<path d="M787.733 1024C918.293 1024 1024 918.186 1024 787.733C1024 657.28 918.187 551.467 787.733 551.467C657.28 551.467 551.467 657.28 551.467 787.733C551.467 918.186 657.28 1024 787.733 1024Z" fill="url(#sidebar-paint3_radial_67_2)"/>
-<defs>
-<radialGradient id="sidebar-paint0_radial_67_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(245.795 216.52) rotate(90) scale(235.267 235.267)">
-<stop offset="0.5" stop-color="#E05C10"/>
-<stop offset="1" stop-color="#D44516"/>
-</radialGradient>
-<radialGradient id="sidebar-paint1_radial_67_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(798.554 216.52) rotate(90) scale(235.267 235.267)">
-<stop offset="0.5" stop-color="#F3D623"/>
-<stop offset="1" stop-color="#F5BE1C"/>
-</radialGradient>
-<radialGradient id="sidebar-paint2_radial_67_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(245.795 770.559) rotate(90) scale(235.267 235.267)">
-<stop offset="0.5" stop-color="#0767AD"/>
-<stop offset="1" stop-color="#015086"/>
-</radialGradient>
-<radialGradient id="sidebar-paint3_radial_67_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(799.727 769.279) rotate(90) scale(235.267 235.267)">
-<stop offset="0.5" stop-color="#0E8C41"/>
-<stop offset="1" stop-color="#0E7A3B"/>
-</radialGradient>
-</defs>
-</svg>
+<div class="brand-mark sidebar" aria-label="틸론AI 4색 로고" role="img">
+    <span class="mk1"></span>
+    <span class="mk2"></span>
+    <span class="mk3"></span>
+    <span class="mk4"></span>
+</div>
                 틸론AI
             </div>
             <div class="us-status"><div class="sdot"></div><span id="sb-user">직원</span></div>
