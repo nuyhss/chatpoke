@@ -20,28 +20,9 @@
         .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 48px 40px; width: 400px; box-shadow: 0 8px 40px rgba(0,0,0,.10); }
         .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
         .login-logo span { font-size: 20px; font-weight: 700; color: var(--tp); }
-        .brand-mark {
-            position: relative;
-            display: block;
-            flex-shrink: 0;
-        }
+        .brand-mark { display: block; flex-shrink: 0; overflow: visible; background: transparent; }
         .brand-mark.login { width: 56px; height: 56px; }
         .brand-mark.sidebar { width: 40px; height: 40px; margin-right: 8px; }
-        .brand-mark span {
-            position: absolute;
-            display: block;
-            width: 46%;
-            height: 46%;
-            border-radius: 50%;
-        }
-        .brand-mark .mk1 { left: 0; top: 0; }
-        .brand-mark .mk2 { right: 0; top: 0; }
-        .brand-mark .mk3 { left: 0; bottom: 0; }
-        .brand-mark .mk4 { right: 0; bottom: 0; }
-        .brand-mark .mk1 { background: radial-gradient(circle at 38% 36%, #ee7d32 0%, #D44516 72%); }
-        .brand-mark .mk2 { background: radial-gradient(circle at 38% 36%, #ffe46a 0%, #F5BE1C 72%); }
-        .brand-mark .mk3 { background: radial-gradient(circle at 38% 36%, #2c8bd1 0%, #015086 72%); }
-        .brand-mark .mk4 { background: radial-gradient(circle at 38% 36%, #2ca85b 0%, #0E7A3B 72%); }
         .login-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
         .login-card p { font-size: 14px; color: var(--ts); margin-bottom: 28px; }
         .fg { margin-bottom: 16px; }
@@ -203,12 +184,12 @@
 <div id="login-screen">
     <div class="login-card">
         <div class="login-logo">
-<div class="brand-mark login" aria-label="틸론AI 4색 로고" role="img">
-    <span class="mk1"></span>
-    <span class="mk2"></span>
-    <span class="mk3"></span>
-    <span class="mk4"></span>
-</div>
+<svg class="brand-mark login" viewBox="0 0 100 100" aria-label="틸론AI 4색 로고" role="img" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="23" cy="23" r="21" fill="#D44516"/>
+    <circle cx="77" cy="23" r="21" fill="#F5BE1C"/>
+    <circle cx="23" cy="77" r="21" fill="#015086"/>
+    <circle cx="77" cy="77" r="21" fill="#0E7A3B"/>
+</svg>
             <span>틸론AI</span>
         </div>
         <h2>로그인</h2>
@@ -228,12 +209,12 @@
     <div class="sidebar">
         <div class="sb-header">
             <div class="ws-name">
-<div class="brand-mark sidebar" aria-label="틸론AI 4색 로고" role="img">
-    <span class="mk1"></span>
-    <span class="mk2"></span>
-    <span class="mk3"></span>
-    <span class="mk4"></span>
-</div>
+<svg class="brand-mark sidebar" viewBox="0 0 100 100" aria-label="틸론AI 4색 로고" role="img" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="23" cy="23" r="21" fill="#D44516"/>
+    <circle cx="77" cy="23" r="21" fill="#F5BE1C"/>
+    <circle cx="23" cy="77" r="21" fill="#015086"/>
+    <circle cx="77" cy="77" r="21" fill="#0E7A3B"/>
+</svg>
                 틸론AI
             </div>
             <div class="us-status"><div class="sdot"></div><span id="sb-user">직원</span></div>
