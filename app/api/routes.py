@@ -11,6 +11,7 @@ IMPROVEMENTS over original:
 import json
 import logging
 from pathlib import Path
+from threading import Lock
 from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body
@@ -47,7 +48,6 @@ from app.core.document_registry import (
     remove_documents,
     update_document,
 )
-from app.core.ui_state_store import get_chats as get_ui_chats_from_store, save_chats as save_ui_chats_to_store
 from app.core.watcher import suppress_watcher_for
 from app.core.vectorstore import (
     get_vectorstore,
@@ -63,6 +63,7 @@ from app.pipeline.parser import extract_full_text
 logger = logging.getLogger("tilon.api")
 
 router = APIRouter()
+_ui_state_lock = Lock()
 
 
 def _normalize_user_id(user_id: Optional[str]) -> Optional[str]:
@@ -76,6 +77,14 @@ def _normalize_user_id(user_id: Optional[str]) -> Optional[str]:
     if not safe or safe in {".", ".."}:
         return None
     return safe
+
+
+def _ui_chats_state_path(user_id: Optional[str]) -> Path:
+    normalized_user_id = _normalize_user_id(user_id)
+    state_dir = DATA_DIR / "ui_state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"chats_{normalized_user_id}.json" if normalized_user_id else "chats_default.json"
+    return state_dir / filename
 
 
 def _resolve_upload_target(filename: str, user_id: Optional[str]) -> Tuple[Path, Optional[str], str]:
@@ -285,7 +294,22 @@ def list_models():
 
 @router.get("/ui-state/chats")
 def get_ui_state_chats(user_id: Optional[str] = None):
-    chats = get_ui_chats_from_store(user_id=user_id)
+    state_path = _ui_chats_state_path(user_id)
+
+    if not state_path.exists():
+        return {"chats": {}}
+
+    with _ui_state_lock:
+        try:
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.warning("Failed to read UI chat state (%s): %s", state_path, e)
+            return {"chats": {}}
+
+    chats = payload.get("chats") if isinstance(payload, dict) else {}
+    if not isinstance(chats, dict):
+        chats = {}
+
     return {"chats": chats}
 
 
@@ -298,19 +322,26 @@ def put_ui_state_chats(
     if not isinstance(chats, dict):
         raise HTTPException(status_code=400, detail="'chats' must be an object.")
 
+    state_path = _ui_chats_state_path(user_id)
+    doc = {"chats": chats}
+
     try:
-        encoded = json.dumps(chats, ensure_ascii=False)
+        encoded = json.dumps(doc, ensure_ascii=False)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid chats payload: {e}")
 
     if len(encoded.encode("utf-8")) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Chat state payload too large.")
 
-    try:
-        save_ui_chats_to_store(chats, user_id=user_id)
-    except Exception as e:
-        logger.exception("Failed to save UI chat state for user_id=%s", user_id)
-        raise HTTPException(status_code=500, detail=f"Failed to save UI chat state: {e}")
+    with _ui_state_lock:
+        try:
+            state_path.write_text(
+                json.dumps(doc, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logger.exception("Failed to write UI chat state (%s)", state_path)
+            raise HTTPException(status_code=500, detail=f"Failed to save UI chat state: {e}")
 
     return {"saved": True, "count": len(chats)}
 
