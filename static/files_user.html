@@ -16,6 +16,8 @@
             --subtle: #5d6c83;
             --accent: #2563eb;
             --accent-2: #3b82f6;
+            --success: #15803d;
+            --warning: #b45309;
         }
         body {
             font-family: 'Pretendard', -apple-system, sans-serif;
@@ -56,6 +58,7 @@
         .btn:hover { border-color: var(--accent); color: var(--accent); }
         .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
         .btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+        .btn:disabled { opacity: .65; cursor: not-allowed; }
         .grid {
             display: grid;
             grid-template-columns: 1.2fr .8fr;
@@ -64,18 +67,73 @@
         .card { padding: 24px; }
         .card h2 { font-size: 22px; margin-bottom: 12px; }
         .card p { color: var(--subtle); line-height: 1.7; }
-        .placeholder {
-            margin-top: 18px;
-            border: 1px dashed var(--border);
-            border-radius: 16px;
-            background: var(--panel-2);
-            min-height: 260px;
+        .form-grid {
             display: grid;
-            place-items: center;
-            text-align: center;
-            padding: 24px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 18px;
+        }
+        .field { display: grid; gap: 8px; }
+        .field.full { grid-column: 1 / -1; }
+        .field label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .field input[type="text"],
+        .field select,
+        .field input[type="file"] {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #fff;
+            padding: 12px 14px;
+            font: inherit;
+            color: var(--text);
+        }
+        .field input[readonly] {
+            background: var(--panel-2);
             color: var(--subtle);
-            line-height: 1.8;
+        }
+        .help {
+            font-size: 13px;
+            color: var(--subtle);
+            line-height: 1.6;
+        }
+        .dept-picker {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: var(--panel-2);
+        }
+        .dept-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: #fff;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: var(--subtle);
+        }
+        .submit-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: center;
+            margin-top: 18px;
+        }
+        .notice {
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(37,99,235,.08);
+            color: var(--accent);
+            line-height: 1.7;
         }
         .meta-list { display: grid; gap: 12px; }
         .meta-item {
@@ -92,18 +150,96 @@
             margin-bottom: 4px;
         }
         .meta-value { font-size: 16px; font-weight: 600; }
-        .notice {
+        .alert-stack {
+            display: grid;
+            gap: 10px;
             margin-top: 18px;
-            padding: 14px 16px;
+        }
+        .alert {
             border-radius: 14px;
-            background: rgba(37,99,235,.08);
-            color: var(--accent);
+            padding: 12px 14px;
+            font-size: 14px;
+            line-height: 1.6;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+        .alert.success {
+            border-color: rgba(21,128,61,.18);
+            background: rgba(21,128,61,.08);
+            color: var(--success);
+        }
+        .alert.warning {
+            border-color: rgba(180,83,9,.18);
+            background: rgba(180,83,9,.08);
+            color: var(--warning);
+        }
+        .request-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 18px;
+        }
+        .request-card {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: #fff;
+            padding: 16px;
+        }
+        .request-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+        .request-title { font-weight: 700; font-size: 16px; }
+        .request-meta {
+            margin-top: 8px;
+            color: var(--subtle);
+            font-size: 13px;
             line-height: 1.7;
         }
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--panel-2);
+            color: var(--subtle);
+            border: 1px solid var(--border);
+        }
+        .chip.pending {
+            background: rgba(180,83,9,.1);
+            color: var(--warning);
+            border-color: rgba(180,83,9,.15);
+        }
+        .chip.approved {
+            background: rgba(21,128,61,.1);
+            color: var(--success);
+            border-color: rgba(21,128,61,.15);
+        }
+        .empty {
+            margin-top: 18px;
+            border: 1px dashed var(--border);
+            border-radius: 16px;
+            background: var(--panel-2);
+            padding: 28px;
+            text-align: center;
+            color: var(--subtle);
+            line-height: 1.7;
+        }
+        .hidden { display: none !important; }
         @media (max-width: 920px) {
             body { padding: 16px; }
             .topbar { flex-direction: column; align-items: flex-start; }
-            .grid { grid-template-columns: 1fr; }
+            .grid, .form-grid { grid-template-columns: 1fr; }
+            .submit-row { flex-direction: column; align-items: stretch; }
         }
     </style>
 </head>
@@ -114,7 +250,7 @@
                 <img src="/static/swf-logo.svg?v=2" alt="틸론AI 로고">
                 <div>
                     <h1>파일 업로드</h1>
-                    <p>일반 사용자가 파일 업로드를 신청하는 화면입니다.</p>
+                    <p>일반 사용자가 파일 업로드를 신청하고, 관리자가 승인하면 챗봇 문서에 반영됩니다.</p>
                 </div>
             </div>
             <div class="actions">
@@ -126,13 +262,48 @@
         <main class="grid">
             <section class="card">
                 <h2>파일 업로드 신청</h2>
-                <p>이 영역에 일반 직원용 업로드 신청 UI를 붙이면 됩니다. public/private 선택, 공개 대상 지정, 신청 이력 조회 같은 기능이 여기에 들어갑니다.</p>
-                <div class="placeholder">
-                    <div>
-                        <strong>향후 구현 위치</strong><br>
-                        PDF 업로드, 공개 범위 설정, 선택 부서/선택 직원 지정, 내 신청 목록
+                <p>문서를 선택하고 공개 범위를 지정하면 관리자 검토 대기 목록으로 들어갑니다.</p>
+
+                <div id="alert-stack" class="alert-stack hidden"></div>
+
+                <form id="upload-form">
+                    <div class="form-grid">
+                        <div class="field full">
+                            <label for="upload-file">업로드 파일</label>
+                            <input id="upload-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+                            <div class="help">PDF, PNG, JPG, JPEG, WEBP 파일을 업로드할 수 있습니다.</div>
+                        </div>
+                        <div class="field">
+                            <label for="user-department-input">신청 부서</label>
+                            <input id="user-department-input" type="text" readonly>
+                        </div>
+                        <div class="field">
+                            <label for="upload-visibility">공개 범위</label>
+                            <select id="upload-visibility">
+                                <option value="public">public</option>
+                                <option value="private">private</option>
+                            </select>
+                        </div>
+                        <div class="field full hidden" id="visible-departments-field">
+                            <label>조회 가능한 부서</label>
+                            <div id="visible-departments" class="dept-picker">
+                                <label class="dept-option"><input type="checkbox" value="RD"> RD</label>
+                                <label class="dept-option"><input type="checkbox" value="OD"> OD</label>
+                                <label class="dept-option"><input type="checkbox" value="MD"> MD</label>
+                            </div>
+                            <div class="help">private 문서는 최소 한 개 이상의 부서를 선택해야 합니다.</div>
+                        </div>
                     </div>
-                </div>
+                    <div class="submit-row">
+                        <div class="help">신청 후에는 관리자 승인 전까지 챗봇 검색 대상에 포함되지 않습니다.</div>
+                        <button class="btn primary" type="submit" id="upload-submit-btn">업로드 신청</button>
+                    </div>
+                </form>
+
+                <h2 style="margin-top:28px;">내 신청 목록</h2>
+                <p>방금 올린 파일이 승인 대기인지, 승인 완료인지 여기서 바로 확인할 수 있습니다.</p>
+                <div id="request-empty" class="empty">아직 올린 신청이 없습니다.</div>
+                <div id="request-list" class="request-list"></div>
             </section>
 
             <aside class="card">
@@ -161,12 +332,61 @@
     <script>
         const API = window.location.origin;
         const ADMIN_ROLES = new Set(["adminD", "admin"]);
+        const DEPARTMENTS = ["RD", "OD", "MD"];
+        let currentUser = null;
+        let requestItems = [];
 
         function roleDisplayLabel(role) {
             if (role === "adminD") return "최고 관리자";
             if (role === "admin") return "관리자";
             if (role === "user") return "사용자";
             return role || "-";
+        }
+
+        function formatDate(value) {
+            if (!value) return "-";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return new Intl.DateTimeFormat("ko-KR", {
+                dateStyle: "medium",
+                timeStyle: "short",
+            }).format(date);
+        }
+
+        function esc(value) {
+            const div = document.createElement("div");
+            div.textContent = value ?? "";
+            return div.innerHTML;
+        }
+
+        function pushAlert(level, message) {
+            const stack = document.getElementById("alert-stack");
+            stack.classList.remove("hidden");
+            const item = document.createElement("div");
+            item.className = `alert ${level}`;
+            item.textContent = message;
+            stack.prepend(item);
+            while (stack.children.length > 4) {
+                stack.removeChild(stack.lastElementChild);
+            }
+        }
+
+        function syncVisibilityControls() {
+            const visibility = document.getElementById("upload-visibility").value;
+            const wrapper = document.getElementById("visible-departments-field");
+            wrapper.classList.toggle("hidden", visibility !== "private");
+
+            document.querySelectorAll("#visible-departments input[type='checkbox']").forEach(input => {
+                if (visibility !== "private") {
+                    input.checked = false;
+                }
+            });
+        }
+
+        function getSelectedVisibleDepartments() {
+            return Array.from(document.querySelectorAll("#visible-departments input[type='checkbox']:checked"))
+                .map(input => input.value)
+                .filter(value => DEPARTMENTS.includes(value));
         }
 
         async function readJsonSafe(response) {
@@ -198,7 +418,105 @@
             window.location.replace("/files/login");
         }
 
+        function renderRequests() {
+            const list = document.getElementById("request-list");
+            const empty = document.getElementById("request-empty");
+            if (!requestItems.length) {
+                list.innerHTML = "";
+                empty.classList.remove("hidden");
+                return;
+            }
+
+            empty.classList.add("hidden");
+            list.innerHTML = requestItems.map(item => {
+                const approved = item.status_category === "approved";
+                const visibility = String(item.visibility || "public").toLowerCase();
+                const visibleDepartments = Array.isArray(item.visible_departments) ? item.visible_departments : [];
+                const statusClass = approved ? "approved" : "pending";
+                const statusLabel = approved ? "승인 완료" : "승인 대기";
+                const approvedMeta = approved && item.approved_at
+                    ? `<div class="request-meta">승인자 ${esc(item.approved_by || "-")} · ${esc(formatDate(item.approved_at))}</div>`
+                    : "";
+
+                return `
+                    <article class="request-card">
+                        <div class="request-head">
+                            <div>
+                                <div class="request-title">${esc(item.source || "이름 없는 파일")}</div>
+                                <div class="request-meta">${esc(formatDate(item.uploaded_at || item.updated_at))} · ${esc(item.department || "미지정")} 부서</div>
+                            </div>
+                            <span class="chip ${statusClass}">${statusLabel}</span>
+                        </div>
+                        <div class="chip-row">
+                            <span class="chip">${esc(visibility)}</span>
+                            <span class="chip">${esc(item.access_level || "전체 공개")}</span>
+                            ${visibility === "private" ? `<span class="chip">${esc(visibleDepartments.join(", ") || "부서 미지정")}</span>` : ""}
+                        </div>
+                        ${approvedMeta}
+                    </article>
+                `;
+            }).join("");
+        }
+
+        async function loadRequests() {
+            const response = await fetch(API + "/files/upload-requests", { credentials: "same-origin" });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                throw new Error(data.detail || "신청 목록을 불러오지 못했습니다.");
+            }
+            requestItems = Array.isArray(data.requests) ? data.requests : [];
+            renderRequests();
+        }
+
+        async function submitUploadRequest(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById("upload-file");
+            const visibility = document.getElementById("upload-visibility").value;
+            const visibleDepartments = getSelectedVisibleDepartments();
+            const file = fileInput.files && fileInput.files[0];
+
+            if (!file) {
+                pushAlert("warning", "업로드할 파일을 먼저 선택해 주세요.");
+                return;
+            }
+            if (visibility === "private" && visibleDepartments.length === 0) {
+                pushAlert("warning", "private 문서는 최소 한 개 이상의 부서를 선택해야 합니다.");
+                return;
+            }
+
+            const button = document.getElementById("upload-submit-btn");
+            button.disabled = true;
+
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("department", currentUser?.department || "RD");
+            formData.append("visibility", visibility);
+            formData.append("visible_departments", visibleDepartments.join(","));
+
+            const response = await fetch(API + "/files/upload-request", {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin"
+            });
+            const data = await readJsonSafe(response);
+            button.disabled = false;
+
+            if (!response.ok) {
+                pushAlert("warning", data.detail || "업로드 신청에 실패했습니다.");
+                return;
+            }
+
+            fileInput.value = "";
+            document.getElementById("upload-visibility").value = "public";
+            syncVisibilityControls();
+            pushAlert("success", `${data.request?.source || "문서"} 업로드 신청이 접수되었습니다.`);
+            await loadRequests();
+        }
+
         document.getElementById("logout-btn").addEventListener("click", logout);
+        document.getElementById("upload-form").addEventListener("submit", submitUploadRequest);
+        document.getElementById("upload-visibility").addEventListener("change", syncVisibilityControls);
+        syncVisibilityControls();
 
         (async () => {
             const user = await fetchCurrentUser();
@@ -210,10 +528,17 @@
                 window.location.replace("/files/admin");
                 return;
             }
+
+            currentUser = user;
             document.getElementById("user-name").textContent = user.username || "-";
             document.getElementById("user-role").textContent = roleDisplayLabel(user.role);
             document.getElementById("user-department").textContent = user.department || "-";
-        })();
+            document.getElementById("user-department-input").value = user.department || "-";
+
+            await loadRequests();
+        })().catch(error => {
+            pushAlert("warning", error.message || "사용자 화면을 불러오지 못했습니다.");
+        });
     </script>
 </body>
 </html>

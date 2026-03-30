@@ -10,19 +10,23 @@ IMPROVEMENTS over original:
 
 import json
 import logging
+import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Depends
 from starlette.concurrency import run_in_threadpool
 
+from app.api.deps import AuthUser, get_current_user, require_admin
 from app.config import (
     OLLAMA_MODEL,
     AVAILABLE_MODELS,
     DATA_DIR,
     LIBRARY_DIR,
     UPLOADS_DIR,
+    PENDING_UPLOADS_DIR,
     CHROMA_DIR,
     ENABLE_OCR,
     VISION_MODEL,
@@ -48,6 +52,12 @@ from app.core.document_registry import (
     remove_documents,
     update_document,
 )
+from app.core.upload_requests import (
+    create_upload_request,
+    get_upload_request,
+    list_upload_requests,
+    update_upload_request,
+)
 from app.core.watcher import suppress_watcher_for
 from app.core.vectorstore import (
     get_vectorstore,
@@ -64,6 +74,10 @@ logger = logging.getLogger("tilon.api")
 
 router = APIRouter()
 _ui_state_lock = Lock()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _normalize_user_id(user_id: Optional[str]) -> Optional[str]:
@@ -99,6 +113,44 @@ def _resolve_upload_target(filename: str, user_id: Optional[str]) -> Tuple[Path,
     return target_dir / safe_filename, normalized_user_id, safe_filename
 
 
+def _resolve_pending_upload_target(filename: str, user_id: Optional[str]) -> Tuple[Path, Optional[str], str]:
+    safe_filename = Path(filename or "").name
+    if not safe_filename:
+        raise HTTPException(status_code=400, detail="유효한 파일명이 필요합니다.")
+
+    normalized_user_id = _normalize_user_id(user_id)
+    target_dir = PENDING_UPLOADS_DIR / normalized_user_id if normalized_user_id else PENDING_UPLOADS_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return _unique_path_in_dir(target_dir, safe_filename), normalized_user_id, safe_filename
+
+
+def _unique_path_in_dir(target_dir: Path, filename: str) -> Path:
+    candidate = target_dir / Path(filename).name
+    if not candidate.exists():
+        return candidate
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    index = 1
+    while True:
+        next_candidate = target_dir / f"{stem}-{index}{suffix}"
+        if not next_candidate.exists():
+            return next_candidate
+        index += 1
+
+
+def _parse_visible_departments(value: Optional[str]) -> List[str]:
+    seen = set()
+    values: List[str] = []
+    for item in str(value or "").split(","):
+        normalized = _normalize_department(item)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        values.append(normalized)
+    return values
+
+
 def _coerce_department(value: Optional[str], fallback: Optional[str]) -> str:
     raw = (value or fallback or "").strip()
     return raw or "미지정"
@@ -119,12 +171,52 @@ def _coerce_access_level(value: Optional[str]) -> str:
     return raw or "전체 공개"
 
 
+def _build_request_payload(entry: dict) -> dict:
+    raw_source_path = str(entry.get("source_path") or "").strip()
+    source_path = Path(raw_source_path).expanduser() if raw_source_path else None
+    exists = bool(source_path and source_path.exists() and source_path.is_file())
+    stat = source_path.stat() if exists and source_path else None
+    visibility = "private" if str(entry.get("visibility") or "").lower() == "private" else "public"
+    is_approved = str(entry.get("status") or "").lower() == "approved"
+
+    return {
+        "doc_id": entry.get("request_id"),
+        "request_id": entry.get("request_id"),
+        "source": entry.get("source"),
+        "source_type": "upload_request",
+        "source_path": str(source_path) if source_path else "",
+        "file_exists": exists,
+        "file_size_bytes": stat.st_size if stat else None,
+        "uploaded_at": entry.get("uploaded_at") or entry.get("created_at"),
+        "created_at": entry.get("created_at"),
+        "updated_at": entry.get("updated_at"),
+        "page_total": None,
+        "chunk_count": 0,
+        "status": "승인 완료" if is_approved else "승인 대기",
+        "status_raw": entry.get("status"),
+        "status_category": "approved" if is_approved else "pending",
+        "owner_id": entry.get("uploader_id"),
+        "uploader_id": entry.get("uploader_id"),
+        "department": _coerce_department(entry.get("department"), entry.get("uploader_id")),
+        "access_level": entry.get("access_level") or ("선택 부서 공개" if visibility == "private" else "전체 공개"),
+        "department_only": visibility == "private",
+        "visibility": visibility,
+        "visible_departments": entry.get("visible_departments") or [],
+        "approved_at": entry.get("approved_at"),
+        "approved_by": entry.get("approved_by"),
+        "languages": [],
+        "extractors_used": [],
+        "input_type": None,
+    }
+
+
 def _build_admin_document_payload(entry: dict) -> dict:
     raw_source_path = str(entry.get("source_path") or "").strip()
     source_path = Path(raw_source_path).expanduser() if raw_source_path else None
     exists = bool(source_path and source_path.exists() and source_path.is_file())
     stat = source_path.stat() if exists and source_path else None
     status = "완료" if entry.get("status") == "ingested" else (entry.get("status") or "대기")
+    visibility = "private" if str(entry.get("visibility") or "").lower() == "private" else "public"
 
     return {
         "doc_id": entry.get("doc_id"),
@@ -140,11 +232,16 @@ def _build_admin_document_payload(entry: dict) -> dict:
         "chunk_count": entry.get("chunk_count", 0),
         "status": status,
         "status_raw": entry.get("status"),
+        "status_category": "approved" if entry.get("status") == "ingested" else "pending",
         "owner_id": entry.get("owner_id"),
         "uploader_id": entry.get("uploader_id"),
         "department": _coerce_department(entry.get("department"), entry.get("owner_id")),
         "access_level": _coerce_access_level(entry.get("access_level")),
         "department_only": bool(entry.get("department_only")),
+        "visibility": visibility,
+        "visible_departments": entry.get("visible_departments") or [],
+        "approved_at": entry.get("approved_at"),
+        "approved_by": entry.get("approved_by"),
         "languages": entry.get("languages") or [],
         "extractors_used": entry.get("extractors_used") or [],
         "input_type": entry.get("input_type"),
@@ -500,8 +597,10 @@ MAX_ADMIN_UPLOAD_FILES = 10
 @router.post("/admin/upload")
 async def upload_department_document(
     file: UploadFile = File(...),
-    admin_id: Optional[str] = Form(default=None),
     department: str = Form(...),
+    visibility: Optional[str] = Form(default="public"),
+    visible_departments: Optional[str] = Form(default=""),
+    current_user: AuthUser = Depends(require_admin),
 ):
     normalized_department = _normalize_department(department)
     if not normalized_department:
@@ -521,7 +620,7 @@ async def upload_department_document(
     target_dir = LIBRARY_DIR / normalized_department
     target_dir.mkdir(parents=True, exist_ok=True)
     save_path = target_dir / safe_filename
-    normalized_admin_id = _normalize_user_id(admin_id)
+    normalized_admin_id = current_user.username
 
     try:
         with open(save_path, "wb") as f:
@@ -545,11 +644,18 @@ async def upload_department_document(
             )
 
         if result.get("doc_id"):
+            normalized_visibility = "private" if str(visibility or "").lower() == "private" else "public"
             update_document(
                 result["doc_id"],
                 {
                     "department": normalized_department,
                     "uploader_id": normalized_admin_id,
+                    "visibility": normalized_visibility,
+                    "visible_departments": _parse_visible_departments(visible_departments) if normalized_visibility == "private" else [],
+                    "access_level": "선택 부서 공개" if normalized_visibility == "private" else "전체 공개",
+                    "department_only": normalized_visibility == "private",
+                    "approved_by": normalized_admin_id,
+                    "approved_at": _utc_now(),
                 },
             )
 
@@ -560,12 +666,175 @@ async def upload_department_document(
             "department": normalized_department,
             "chunks_stored": result.get("count", 0),
             "source_type": result.get("source_type"),
+            "visibility": "private" if str(visibility or "").lower() == "private" else "public",
+            "visible_departments": _parse_visible_departments(visible_departments),
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("admin upload failed")
         raise HTTPException(status_code=500, detail=f"admin upload failed: {e}")
+
+
+@router.post("/files/upload-request")
+async def create_file_upload_request(
+    file: UploadFile = File(...),
+    department: Optional[str] = Form(default=None),
+    visibility: Optional[str] = Form(default="public"),
+    visible_departments: Optional[str] = Form(default=""),
+    current_user: AuthUser = Depends(get_current_user),
+):
+    safe_path, normalized_user_id, safe_filename = _resolve_pending_upload_target(file.filename, current_user.username)
+    ext = Path(safe_filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {ext}. Allowed: {ALLOWED_EXTENSIONS}",
+        )
+
+    normalized_visibility = "private" if str(visibility or "").lower() == "private" else "public"
+    normalized_department = _normalize_department(department) or _normalize_department(current_user.department) or "RD"
+    selected_departments = _parse_visible_departments(visible_departments)
+
+    if normalized_visibility == "private" and not selected_departments:
+        raise HTTPException(status_code=400, detail="private 문서는 최소 한 개 이상의 부서를 선택해야 합니다.")
+
+    try:
+        with open(safe_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+    entry = create_upload_request(
+        filename=safe_filename,
+        source_path=safe_path,
+        uploader_id=normalized_user_id or current_user.username,
+        department=normalized_department,
+        visibility=normalized_visibility,
+        visible_departments=selected_departments,
+    )
+
+    return {
+        "message": "업로드 신청이 접수되었습니다.",
+        "request": _build_request_payload(entry),
+    }
+
+
+@router.get("/files/upload-requests")
+def list_file_upload_requests(current_user: AuthUser = Depends(get_current_user)):
+    entries = list_upload_requests(uploader_id=current_user.username)
+    entries.sort(
+        key=lambda item: (
+            str(item.get("uploaded_at") or ""),
+            str(item.get("updated_at") or ""),
+            str(item.get("source") or ""),
+        ),
+        reverse=True,
+    )
+    return {
+        "count": len(entries),
+        "requests": [_build_request_payload(entry) for entry in entries],
+    }
+
+
+@router.post("/admin/documents/approve")
+async def approve_admin_documents(
+    payload: dict = Body(...),
+    current_user: AuthUser = Depends(require_admin),
+):
+    request_ids = [str(item or "").strip() for item in (payload.get("doc_ids") or []) if str(item or "").strip()]
+    if not request_ids:
+        raise HTTPException(status_code=400, detail="승인할 문서를 선택해 주세요.")
+
+    approved_count = 0
+    approved_documents = []
+    failures = []
+
+    for request_id in request_ids:
+        request_entry = get_upload_request(request_id)
+        if not request_entry:
+            failures.append({"request_id": request_id, "reason": "요청을 찾지 못했습니다."})
+            continue
+        if request_entry.get("status") != "pending":
+            failures.append({"request_id": request_id, "reason": "이미 처리된 요청입니다."})
+            continue
+
+        source_path = Path(str(request_entry.get("source_path") or "")).expanduser()
+        if not source_path.exists():
+            failures.append({"request_id": request_id, "reason": "원본 파일을 찾지 못했습니다."})
+            continue
+
+        department = _normalize_department(request_entry.get("department")) or "RD"
+        target_dir = LIBRARY_DIR / department
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = _unique_path_in_dir(target_dir, request_entry.get("source") or source_path.name)
+
+        try:
+            shutil.copy2(source_path, target_path)
+            suppress_watcher_for(target_path)
+            result = await run_in_threadpool(
+                ingest_single_file,
+                target_path,
+                request_entry.get("uploader_id"),
+                department,
+            )
+            if result.get("count", 0) == 0 or not result.get("doc_id"):
+                if target_path.exists():
+                    target_path.unlink()
+                failures.append({"request_id": request_id, "reason": result.get("message", "문서를 처리하지 못했습니다.")})
+                continue
+
+            approved_request = update_upload_request(
+                request_id,
+                {
+                    "status": "approved",
+                    "approved_by": current_user.username,
+                    "approved_at": _utc_now(),
+                    "approved_doc_id": result["doc_id"],
+                    "approved_source_path": str(target_path),
+                    "source_path": str(target_path),
+                },
+            ) or {}
+
+            if source_path.exists() and source_path != target_path:
+                source_path.unlink()
+
+            update_document(
+                result["doc_id"],
+                {
+                    "department": department,
+                    "uploader_id": request_entry.get("uploader_id"),
+                    "visibility": request_entry.get("visibility") or "public",
+                    "visible_departments": request_entry.get("visible_departments") or [],
+                    "access_level": request_entry.get("access_level") or "전체 공개",
+                    "department_only": str(request_entry.get("visibility") or "").lower() == "private",
+                    "approved_by": current_user.username,
+                    "approved_at": approved_request.get("updated_at") or approved_request.get("approved_at"),
+                    "request_id": request_id,
+                },
+            )
+            approved_count += 1
+            approved_documents.append({
+                "request_id": request_id,
+                "doc_id": result["doc_id"],
+                "source": request_entry.get("source"),
+            })
+        except Exception as e:
+            logger.exception("approve_admin_documents failed for %s", request_id)
+            if target_path.exists():
+                target_path.unlink()
+            failures.append({"request_id": request_id, "reason": str(e)})
+
+    if approved_count == 0 and failures:
+        raise HTTPException(status_code=500, detail=failures[0]["reason"])
+
+    return {
+        "approved_count": approved_count,
+        "approved_documents": approved_documents,
+        "failed_count": len(failures),
+        "failures": failures,
+    }
 
 
 @router.post("/admin/upload-multiple")
@@ -798,7 +1067,9 @@ def reset_db():
 @router.get("/admin/documents")
 def admin_documents():
     try:
-        documents = [_build_admin_document_payload(entry) for entry in list_documents()]
+        approved_documents = [_build_admin_document_payload(entry) for entry in list_documents()]
+        pending_documents = [_build_request_payload(entry) for entry in list_upload_requests(status="pending")]
+        documents = pending_documents + approved_documents
         documents.sort(
             key=lambda doc: (
                 str(doc.get("uploaded_at") or ""),

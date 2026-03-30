@@ -28,6 +28,8 @@ CHROMA_DIR = Path(os.getenv("CHROMA_DIR", BASE_DIR / "chroma_db"))
 DOCUMENT_REGISTRY_PATH = Path(
     os.getenv("DOCUMENT_REGISTRY_PATH", DATA_DIR / "document_registry.json")
 )
+PENDING_UPLOADS_DIR = Path(os.getenv("PENDING_UPLOADS_DIR", DATA_DIR / "pending_uploads"))
+UPLOAD_REQUESTS_PATH = Path(os.getenv("UPLOAD_REQUESTS_PATH", DATA_DIR / "upload_requests.json"))
 MARKER_OUTPUT_DIR = BASE_DIR / "marker_output"
 
 # ── Ollama / LLM ──────────────────────────────────────────────────────

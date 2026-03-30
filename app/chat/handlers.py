@@ -75,6 +75,29 @@ def _might_need_web_search(text: str) -> bool:
     return any(kw in lower for kw in indicators)
 
 
+def _looks_like_specific_entity_query(text: str) -> bool:
+    raw = (text or "").strip()
+    lower = raw.lower()
+    if not raw:
+        return False
+
+    indicators = [
+        "선수", "감독", "구단", "팀", "인물", "사람", "프로필", "경력",
+        "who is", "player", "coach", "team", "profile", "career",
+    ]
+    if any(keyword in lower for keyword in indicators):
+        return True
+
+    if re.search(r"[가-힣]{2,5}\s?(선수|감독|코치)", raw):
+        return True
+
+    if raw.endswith("는?") or raw.endswith("은?") or raw.endswith("이야?") or raw.endswith("인가?"):
+        if re.search(r"[가-힣]{2,5}", raw):
+            return True
+
+    return False
+
+
 def _needs_full_document_context(text: str) -> bool:
     """
     Detect requests that need the whole uploaded document, not just top-k chunks.
@@ -381,6 +404,13 @@ def _direct_extraction_ambiguous_answer(upload_sources: List[str]) -> str:
     return (
         "업로드 파일이 여러 개라 어떤 파일에서 텍스트를 뽑아야 할지 애매합니다. "
         f"파일명을 같이 말해 주세요. (예: {preview}{suffix})"
+    )
+
+
+def _ungrounded_entity_answer(user_message: str) -> str:
+    return (
+        f"현재 가지고 있는 문서나 검색 근거만으로는 '{user_message.strip()}'에 대해 확실하게 확인되지 않습니다. "
+        "근거 없는 추측으로 답하지 않겠습니다. 관련 문서를 업로드하거나 웹 검색을 켜고 다시 물어봐 주세요."
     )
 
 
@@ -1011,6 +1041,21 @@ def handle_chat(
     has_explicit_scope = bool(scoped_source or scoped_doc_id)
     has_source_type_scope = bool(scoped_source_type)
     has_any_scope = has_explicit_scope or has_source_type_scope
+    general_low_confidence = (
+        not has_any_scope
+        and docs
+        and retrieval.confidence < DOCUMENT_CONFIDENCE_THRESHOLD
+        and not retrieval.strong_keyword_hit
+    )
+
+    if general_low_confidence:
+        logger.info(
+            "Discarding weak unscoped retrieval (confidence=%.2f, threshold=%.2f, keyword_hit=%s)",
+            retrieval.confidence,
+            DOCUMENT_CONFIDENCE_THRESHOLD,
+            retrieval.strong_keyword_hit,
+        )
+        docs = []
 
     if has_any_scope and not use_full_document:
         threshold = _scoped_confidence_threshold(docs) if docs else DOCUMENT_CONFIDENCE_THRESHOLD
@@ -1094,7 +1139,7 @@ def handle_chat(
         allow_web_search = False
 
     if allow_web_search:
-        if _might_need_web_search(resolved_query):
+        if _might_need_web_search(resolved_query) or _looks_like_specific_entity_query(user_message):
             web_results = _search_web(resolved_query)
             if web_results:
                 web_context = web_results
@@ -1103,6 +1148,22 @@ def handle_chat(
                 logger.info("Web search requested but no results were returned.")
         else:
             logger.debug("Web search skipped by heuristic (query appears local/static).")
+
+    if not doc_context and not web_context and _looks_like_specific_entity_query(user_message):
+        ungrounded_answer = _ungrounded_entity_answer(user_message)
+        return {
+            "answer": ungrounded_answer,
+            "sources": [],
+            "mode": "general",
+            "active_source": active_source,
+            "active_doc_id": active_doc_id,
+            "conversation_state": derived_state,
+            "response_metadata": _build_response_metadata(
+                finish_reason="stop",
+                response_capture=ungrounded_answer,
+                resolved_query=resolved_query,
+            ),
+        }
     # ── Step 3: Build prompt with all context and let LLM decide ──
     prompt = _build_prompt(
         user_message=user_message,

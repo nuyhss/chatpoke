@@ -3,173 +3,723 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>틸론AI 파일 관리자</title>
-    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>TilonAI 관리자 문서 승인</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
-            --bg: #f5f7fb;
-            --panel: rgba(255,255,255,.94);
-            --panel-2: #f3f6fb;
-            --border: #d9e2f0;
-            --text: #10213a;
-            --subtle: #5d6c83;
-            --accent: #2563eb;
-            --accent-2: #3b82f6;
-            --success: #10b981;
+            --bg: #eef4ff;
+            --panel: rgba(255,255,255,.9);
+            --panel-strong: #ffffff;
+            --line: #d5e1f4;
+            --line-strong: #bfd0ed;
+            --text: #0f1e38;
+            --muted: #5e6f8b;
+            --brand: #2f66ea;
+            --brand-2: #5a86f0;
+            --green: #16a34a;
+            --green-soft: #eaf9f0;
+            --amber: #d97706;
+            --amber-soft: #fff4df;
+            --red: #ef4444;
+            --red-soft: #fff1f2;
+            --shadow: 0 18px 50px rgba(30, 64, 175, .10);
         }
         body {
-            font-family: 'Pretendard', -apple-system, sans-serif;
-            background: linear-gradient(180deg, #f8fbff 0%, #eef3fb 100%);
+            font-family: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(47,102,234,.14), transparent 32%),
+                linear-gradient(180deg, #f6f9ff 0%, var(--bg) 100%);
             color: var(--text);
             min-height: 100vh;
-            padding: 24px;
+            padding: 28px;
         }
-        .shell { max-width: 1180px; margin: 0 auto; }
-        .topbar, .card {
+        .shell { max-width: 1500px; margin: 0 auto; }
+        .hero, .summary, .panel, .cart-bar {
             background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(14px);
         }
-        .topbar {
+        .hero {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 18px;
+            padding: 28px 32px;
+        }
+        .hero-left { display: flex; align-items: center; gap: 18px; }
+        .logo-box {
+            width: 70px;
+            height: 70px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, var(--brand), var(--brand-2));
+            display: grid;
+            place-items: center;
+            box-shadow: 0 14px 34px rgba(47,102,234,.26);
+        }
+        .logo-box img { width: 34px; }
+        .hero h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -.03em;
+            margin-bottom: 6px;
+        }
+        .hero p {
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .search {
+            width: 420px;
+            max-width: 100%;
+            padding: 16px 18px;
+            border-radius: 18px;
+            border: 1px solid var(--line-strong);
+            background: rgba(255,255,255,.96);
+            color: var(--text);
+            font: inherit;
+            outline: none;
+        }
+        .search:focus {
+            border-color: var(--brand);
+            box-shadow: 0 0 0 4px rgba(47,102,234,.12);
+        }
+        .btn {
+            border: 1px solid var(--line-strong);
+            background: #fff;
+            color: var(--text);
+            padding: 15px 18px;
+            border-radius: 18px;
+            font: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            transition: .18s ease;
+        }
+        .btn:hover { transform: translateY(-1px); border-color: var(--brand); color: var(--brand); }
+        .btn.primary {
+            background: linear-gradient(135deg, var(--brand), var(--brand-2));
+            border-color: transparent;
+            color: #fff;
+        }
+        .btn.primary:hover {
+            color: #fff;
+            box-shadow: 0 12px 28px rgba(47,102,234,.24);
+        }
+        .btn.ghost-red { color: var(--red); }
+        .summary {
+            margin-top: 18px;
+            padding: 20px 28px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 16px;
-            padding: 22px 24px;
-            margin-bottom: 18px;
+            flex-wrap: wrap;
         }
-        .brand { display: flex; align-items: center; gap: 14px; }
-        .brand img { width: 46px; height: auto; }
-        .brand h1 { font-size: 28px; margin-bottom: 4px; }
-        .brand p { font-size: 14px; color: var(--subtle); }
-        .actions { display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn {
-            border: 1px solid var(--border);
-            background: #fff;
-            color: var(--subtle);
-            padding: 10px 14px;
-            border-radius: 10px;
-            cursor: pointer;
-            font: inherit;
+        .summary-left, .summary-right {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
         }
-        .btn:hover { border-color: var(--accent); color: var(--accent); }
-        .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
-        .grid {
-            display: grid;
-            grid-template-columns: 1.2fr .8fr;
-            gap: 18px;
-        }
-        .card { padding: 24px; }
-        .card h2 { font-size: 22px; margin-bottom: 12px; }
-        .card p { color: var(--subtle); line-height: 1.7; }
-        .badge {
+        .status-pill, .user-chip {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
+            gap: 10px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .status-dot {
+            width: 11px;
+            height: 11px;
             border-radius: 999px;
-            border: 1px solid rgba(16,185,129,.24);
-            background: rgba(16,185,129,.10);
-            color: var(--success);
+            background: var(--green);
+            box-shadow: 0 0 0 8px rgba(22,163,74,.10);
+        }
+        .metric strong {
+            color: var(--text);
+            font-size: 26px;
+            font-weight: 700;
+            margin-left: 6px;
+        }
+        .layout {
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr) 320px;
+            gap: 18px;
+            margin-top: 22px;
+            align-items: start;
+        }
+        .panel { overflow: hidden; }
+        .panel-head {
+            padding: 22px 24px 16px;
+            border-bottom: 1px solid var(--line);
+        }
+        .panel-head h2 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -.03em;
+            margin-bottom: 6px;
+        }
+        .panel-head p {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+        .panel-body { padding: 20px 24px 24px; }
+        .filter-list, .alert-list, .meta-list { display: grid; gap: 12px; }
+        .filter-item {
+            width: 100%;
+            border: 1px solid transparent;
+            background: transparent;
+            border-radius: 18px;
+            padding: 16px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font: inherit;
+            color: var(--text);
+            font-weight: 500;
+        }
+        .filter-item:hover { background: #f4f8ff; border-color: var(--line); }
+        .filter-item.active {
+            background: linear-gradient(135deg, var(--brand), #3157d6);
+            color: #fff;
+            box-shadow: 0 16px 28px rgba(47,102,234,.22);
+        }
+        .count-badge {
+            min-width: 42px;
+            text-align: center;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(47,102,234,.08);
+            color: var(--brand);
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .filter-item.active .count-badge {
+            background: rgba(255,255,255,.18);
+            color: #fff;
+        }
+        .center-stack { display: grid; gap: 18px; }
+        .approval-intro {
+            border: 1px dashed #cbdaf4;
+            border-radius: 24px;
+            background: linear-gradient(180deg, #fbfdff, #f5f8ff);
+            padding: 22px 24px;
+        }
+        .approval-intro h3 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .approval-intro p {
+            color: var(--muted);
+            line-height: 1.7;
+        }
+        .upload-card {
+            border: 1px dashed #cbdaf4;
+            border-radius: 24px;
+            background: linear-gradient(180deg, #ffffff, #f7faff);
+            padding: 22px 24px;
+        }
+        .upload-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 18px;
+        }
+        .field {
+            display: grid;
+            gap: 8px;
+        }
+        .field label {
             font-size: 13px;
             font-weight: 600;
+            color: var(--muted);
         }
-        .placeholder {
-            margin-top: 18px;
-            border: 1px dashed var(--border);
-            border-radius: 16px;
-            background: var(--panel-2);
-            min-height: 260px;
-            display: grid;
-            place-items: center;
-            text-align: center;
-            padding: 24px;
-            color: var(--subtle);
-            line-height: 1.8;
-        }
-        .meta-list { display: grid; gap: 12px; }
-        .meta-item {
+        .field select, .field input[type="file"] {
+            width: 100%;
             padding: 14px 16px;
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 16px;
+            border: 1px solid var(--line-strong);
+            background: #fff;
+            font: inherit;
+            color: var(--text);
+        }
+        .dept-picker {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 14px;
+            border-radius: 18px;
+            border: 1px solid var(--line-strong);
             background: #fff;
         }
-        .meta-label {
-            font-size: 12px;
-            color: var(--subtle);
-            text-transform: uppercase;
-            letter-spacing: .04em;
-            margin-bottom: 4px;
+        .dept-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border-radius: 999px;
+            background: #f4f8ff;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 500;
         }
-        .meta-value { font-size: 16px; font-weight: 600; }
-        @media (max-width: 920px) {
+        .dept-option input {
+            accent-color: var(--brand);
+        }
+        .upload-actions {
+            margin-top: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .upload-note {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+        .upload-feedback {
+            margin-top: 14px;
+            border-radius: 16px;
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+        .upload-feedback.info {
+            border-color: #c7d7ff;
+            background: #f5f8ff;
+            color: var(--brand);
+        }
+        .upload-feedback.success {
+            border-color: #b6edc8;
+            background: #f4fdf7;
+            color: var(--green);
+        }
+        .upload-feedback.warning {
+            border-color: #ffe2a8;
+            background: #fffaf0;
+            color: var(--amber);
+        }
+        .cart-bar {
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            border-radius: 24px;
+        }
+        .cart-copy {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+        .cart-copy strong {
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .cart-copy span {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+        .cart-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .section-card {
+            background: var(--panel-strong);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            overflow: hidden;
+        }
+        .section-head {
+            padding: 20px 22px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--line);
+            flex-wrap: wrap;
+        }
+        .section-head h3 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -.02em;
+        }
+        .section-head p {
+            color: var(--muted);
+            line-height: 1.6;
+        }
+        .section-body { padding: 10px 18px 18px; }
+        .doc-list { display: grid; gap: 12px; }
+        .doc-card {
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            background: #fff;
+            padding: 18px;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: 16px;
+            align-items: start;
+        }
+        .doc-check {
+            width: 22px;
+            height: 22px;
+            margin-top: 4px;
+            accent-color: var(--brand);
+        }
+        .doc-main { min-width: 0; }
+        .doc-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -.02em;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+        .doc-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+        .chip.pending {
+            color: var(--amber);
+            background: var(--amber-soft);
+            border-color: rgba(217,119,6,.18);
+        }
+        .chip.approved {
+            color: var(--green);
+            background: var(--green-soft);
+            border-color: rgba(22,163,74,.18);
+        }
+        .chip.rejected {
+            color: var(--red);
+            background: var(--red-soft);
+            border-color: rgba(239,68,68,.15);
+        }
+        .chip.soft {
+            color: var(--muted);
+            background: #f4f7fc;
+            border-color: var(--line);
+        }
+        .doc-description {
+            color: var(--muted);
+            line-height: 1.7;
+            font-size: 14px;
+        }
+        .doc-side {
+            display: grid;
+            gap: 8px;
+            justify-items: end;
+            min-width: 160px;
+        }
+        .doc-side .label {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .doc-side .value {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .doc-side .mini {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .alert-item, .meta-item {
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 18px;
+            padding: 16px;
+        }
+        .alert-item.success { border-color: #b6edc8; background: #f4fdf7; }
+        .alert-item.warning { border-color: #ffe2a8; background: #fffaf0; }
+        .alert-time {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+        .meta-item .meta-label {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            margin-bottom: 6px;
+        }
+        .meta-item .meta-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .empty {
+            border: 1px dashed var(--line-strong);
+            border-radius: 22px;
+            padding: 28px 22px;
+            text-align: center;
+            color: var(--muted);
+            line-height: 1.8;
+            background: #fafcff;
+        }
+        .hidden { display: none !important; }
+        @media (max-width: 1260px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 760px) {
             body { padding: 16px; }
-            .topbar { flex-direction: column; align-items: flex-start; }
-            .grid { grid-template-columns: 1fr; }
+            .hero, .summary, .panel-body, .panel-head, .cart-bar, .section-head, .section-body { padding-left: 18px; padding-right: 18px; }
+            .hero { align-items: flex-start; }
+            .hero-actions { width: 100%; justify-content: stretch; }
+            .search { width: 100%; }
+            .upload-grid { grid-template-columns: 1fr; }
+            .doc-card { grid-template-columns: 1fr; }
+            .doc-side { justify-items: start; min-width: 0; }
         }
     </style>
 </head>
 <body>
     <div class="shell">
-        <header class="topbar">
-            <div class="brand">
-                <img src="/static/swf-logo.svg?v=2" alt="틸론AI 로고">
+        <header class="hero">
+            <div class="hero-left">
+                <div class="logo-box">
+                    <img src="/static/swf-logo.svg?v=3" alt="TilonAI">
+                </div>
                 <div>
-                    <h1>파일 관리자</h1>
-                    <p>관리자 승인, 반려, 삭제 기능을 확장할 전용 화면입니다.</p>
+                    <h1>문서 관리</h1>
+                    <p>관리자는 업로드된 문서를 한 번에 확인하고, 선택해서 승인할 수 있습니다.</p>
                 </div>
             </div>
-            <div class="actions">
-                <button class="btn" type="button" onclick="window.location.href='/chat/login'">챗봇 사이트</button>
-                <button class="btn primary" type="button" id="logout-btn">로그아웃</button>
+            <div class="hero-actions">
+                <input id="search-input" class="search" type="search" placeholder="파일명 검색..." />
+                <button class="btn ghost-red" type="button" id="logout-btn">로그아웃</button>
             </div>
         </header>
 
-        <main class="grid">
-            <section class="card">
-                <span class="badge">관리자 전용</span>
-                <h2 style="margin-top:14px;">승인/반려/삭제 작업 영역</h2>
-                <p>이 화면에서 업로드 신청 목록, 승인 처리, 반려 사유 입력, 삭제 이력 확인 같은 관리자 기능을 확장하면 됩니다.</p>
-                <div class="placeholder">
-                    <div>
-                        <strong>향후 구현 위치</strong><br>
-                        업로드 신청 목록, 승인/반려 버튼, 권한 범위 설정, 문서 삭제 이력
-                    </div>
+        <section class="summary">
+            <div class="summary-left">
+                <div class="status-pill">
+                    <span class="status-dot"></span>
+                    <span id="summary-status">문서 현황 불러오는 중</span>
                 </div>
-            </section>
+                <div class="metric">총 문서 <strong id="summary-total">0</strong></div>
+                <div class="metric">승인 대기 <strong id="summary-pending">0</strong></div>
+                <div class="metric">승인 완료 <strong id="summary-approved">0</strong></div>
+            </div>
+            <div class="summary-right">
+                <div class="user-chip">관리자 <strong id="current-user">-</strong></div>
+                <button class="btn" type="button" id="refresh-btn">새로고침</button>
+            </div>
+        </section>
 
-            <aside class="card">
-                <h2>접속 정보</h2>
-                <div class="meta-list">
-                    <div class="meta-item">
-                        <div class="meta-label">아이디</div>
-                        <div class="meta-value" id="user-name">불러오는 중...</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">권한</div>
-                        <div class="meta-value" id="user-role">불러오는 중...</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">부서</div>
-                        <div class="meta-value" id="user-department">불러오는 중...</div>
-                    </div>
+        <div class="layout">
+            <aside class="panel">
+                <div class="panel-head">
+                    <h2>부서 필터</h2>
+                    <p>부서별로 업로드 문서를 나눠 보고 승인 대상을 빠르게 좁힙니다.</p>
+                </div>
+                <div class="panel-body">
+                    <div id="department-filters" class="filter-list"></div>
                 </div>
             </aside>
-        </main>
+
+            <main class="center-stack">
+                <section class="approval-intro">
+                    <h3>선택한 파일들을 장바구니처럼 모아 한 번에 승인할 수 있어요</h3>
+                    <p>일반 계정이 올린 파일은 여기서 검토 후 승인합니다. 체크박스로 고른 뒤 승인 버튼을 누르면 승인 완료 목록으로 이동합니다.</p>
+                </section>
+
+                <section class="upload-card">
+                    <h3 style="font-size:22px;font-weight:700;">관리자 업로드</h3>
+                    <p style="color:var(--muted);line-height:1.7;margin-top:8px;">업로드 대상 부서와 공개 범위를 함께 지정할 수 있습니다. `private`를 고르면 보여줄 부서를 여러 개 선택할 수 있어요.</p>
+                    <div class="upload-grid">
+                        <div class="field">
+                            <label for="upload-department">업로드 대상 부서</label>
+                            <select id="upload-department">
+                                <option value="RD">RD</option>
+                                <option value="OD">OD</option>
+                                <option value="MD">MD</option>
+                                <option value="ED">ED</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="upload-visibility">공개 범위</label>
+                            <select id="upload-visibility">
+                                <option value="public">public</option>
+                                <option value="private">private</option>
+                            </select>
+                        </div>
+                        <div class="field" style="grid-column:1 / -1;">
+                            <label>조회 가능한 부서</label>
+                            <div id="visible-departments" class="dept-picker">
+                                <label class="dept-option"><input type="checkbox" value="RD"> RD</label>
+                                <label class="dept-option"><input type="checkbox" value="OD"> OD</label>
+                                <label class="dept-option"><input type="checkbox" value="MD"> MD</label>
+                                <label class="dept-option"><input type="checkbox" value="ED"> ED</label>
+                            </div>
+                        </div>
+                        <div class="field" style="grid-column:1 / -1;">
+                            <label for="upload-file">업로드 파일</label>
+                            <input id="upload-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp">
+                        </div>
+                    </div>
+                    <div class="upload-actions">
+                        <div class="upload-note">public은 전체 부서가 볼 수 있고, private은 선택한 부서만 볼 수 있도록 저장됩니다.</div>
+                        <button class="btn primary" type="button" id="upload-submit-btn">문서 업로드</button>
+                    </div>
+                    <div id="upload-feedback" class="upload-feedback">파일을 선택한 뒤 업로드 버튼을 누르면 여기서 진행 상태를 바로 보여줍니다.</div>
+                </section>
+
+                <section class="cart-bar">
+                    <div class="cart-copy">
+                        <strong id="selection-count">0개 선택됨</strong>
+                        <span id="selection-hint">승인 대기 파일을 선택하면 여기서 한 번에 처리할 수 있습니다.</span>
+                    </div>
+                    <div class="cart-actions">
+                        <button class="btn" type="button" id="clear-selection-btn">선택 비우기</button>
+                        <button class="btn primary" type="button" id="approve-selected-btn">선택한 파일 승인하기</button>
+                    </div>
+                </section>
+
+                <section class="section-card">
+                    <div class="section-head">
+                        <div>
+                            <h3>승인 대기 문서</h3>
+                            <p>직원 계정이 올린 문서 중 아직 관리자가 승인하지 않은 파일입니다.</p>
+                        </div>
+                        <div class="chip pending" id="pending-chip">0건</div>
+                    </div>
+                    <div class="section-body">
+                        <div id="pending-list" class="doc-list"></div>
+                        <div id="pending-empty" class="empty hidden">현재 승인 대기 문서가 없습니다.</div>
+                    </div>
+                </section>
+
+                <section class="section-card">
+                    <div class="section-head">
+                        <div>
+                            <h3>승인 완료 문서</h3>
+                            <p>승인된 문서는 승인자와 승인 시각까지 함께 확인할 수 있습니다.</p>
+                        </div>
+                        <div class="chip approved" id="approved-chip">0건</div>
+                    </div>
+                    <div class="section-body">
+                        <div id="approved-list" class="doc-list"></div>
+                        <div id="approved-empty" class="empty hidden">아직 승인 완료 문서가 없습니다.</div>
+                    </div>
+                </section>
+            </main>
+
+            <aside class="panel">
+                <div class="panel-head">
+                    <h2>관리자 정보</h2>
+                    <p>로그인한 관리자 계정과 최근 승인 알림을 확인합니다.</p>
+                </div>
+                <div class="panel-body">
+                    <div class="meta-list">
+                        <div class="meta-item">
+                            <div class="meta-label">아이디</div>
+                            <div class="meta-value" id="meta-username">불러오는 중...</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">권한</div>
+                            <div class="meta-value" id="meta-role">불러오는 중...</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">부서</div>
+                            <div class="meta-value" id="meta-department">불러오는 중...</div>
+                        </div>
+                    </div>
+                    <div style="height:18px"></div>
+                    <div class="panel-head" style="padding:0 0 14px;border-bottom:none;">
+                        <h2 style="font-size:22px;margin-bottom:0;">알림</h2>
+                    </div>
+                    <div id="alerts-list" class="alert-list"></div>
+                </div>
+            </aside>
+        </div>
     </div>
 
     <script>
         const API = window.location.origin;
         const ADMIN_ROLES = new Set(["adminD", "admin"]);
+        const ALL_DEPARTMENT = "__ALL__";
+        const DEPARTMENTS = ["RD", "OD", "MD", "ED"];
 
-        function roleDisplayLabel(role) {
+        let currentUser = null;
+        let allDocuments = [];
+        let selectedIds = new Set();
+        let activeDepartment = ALL_DEPARTMENT;
+        let alerts = [];
+
+        function roleLabel(role) {
             if (role === "adminD") return "최고 관리자";
             if (role === "admin") return "관리자";
-            if (role === "user") return "사용자";
             return role || "-";
+        }
+
+        function esc(value) {
+            const node = document.createElement("div");
+            node.textContent = value ?? "";
+            return node.innerHTML;
+        }
+
+        function formatDate(value) {
+            if (!value) return "-";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return "-";
+            return date.toLocaleString("ko-KR", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit"
+            });
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined) return "-";
+            const value = Number(bytes);
+            if (Number.isNaN(value)) return "-";
+            if (value < 1024) return `${value} B`;
+            if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+            return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function getSelectedVisibleDepartments() {
+            return Array.from(document.querySelectorAll('#visible-departments input:checked')).map(input => input.value);
+        }
+
+        function syncVisibilityControls() {
+            const visibility = document.getElementById("upload-visibility").value;
+            const picker = document.getElementById("visible-departments");
+            picker.style.opacity = visibility === "private" ? "1" : ".55";
+            picker.querySelectorAll("input").forEach(input => {
+                input.disabled = visibility !== "private";
+                if (visibility !== "private") {
+                    input.checked = false;
+                }
+            });
         }
 
         async function readJsonSafe(response) {
@@ -181,14 +731,10 @@
         }
 
         async function fetchCurrentUser() {
-            try {
-                const response = await fetch(API + "/auth/me", { credentials: "same-origin" });
-                if (!response.ok) return null;
-                const data = await readJsonSafe(response);
-                return data.user || null;
-            } catch {
-                return null;
-            }
+            const response = await fetch(API + "/auth/me", { credentials: "same-origin" });
+            if (!response.ok) return null;
+            const data = await readJsonSafe(response);
+            return data.user || null;
         }
 
         async function logout() {
@@ -201,9 +747,270 @@
             window.location.replace("/files/login");
         }
 
-        document.getElementById("logout-btn").addEventListener("click", logout);
+        function pushAlert(level, message) {
+            alerts.unshift({
+                level,
+                message,
+                created_at: new Date().toISOString()
+            });
+            alerts = alerts.slice(0, 8);
+            renderAlerts();
+        }
 
-        (async () => {
+        function setUploadFeedback(level, message) {
+            const box = document.getElementById("upload-feedback");
+            box.className = `upload-feedback ${level || "info"}`;
+            box.textContent = message || "";
+        }
+
+        function renderAlerts() {
+            const list = document.getElementById("alerts-list");
+            if (!alerts.length) {
+                list.innerHTML = '<div class="empty">아직 알림이 없습니다.</div>';
+                return;
+            }
+            list.innerHTML = alerts.map(item => `
+                <div class="alert-item ${esc(item.level || "success")}">
+                    <div class="alert-time">${esc(formatDate(item.created_at))}</div>
+                    <div>${esc(item.message || "")}</div>
+                </div>
+            `).join("");
+        }
+
+        function getFilteredDocuments() {
+            const query = document.getElementById("search-input").value.trim().toLowerCase();
+            return allDocuments.filter(doc => {
+                const departmentMatch = activeDepartment === ALL_DEPARTMENT || String(doc.department || "") === activeDepartment;
+                const queryMatch = !query || String(doc.source || "").toLowerCase().includes(query);
+                return departmentMatch && queryMatch;
+            });
+        }
+
+        function getPendingDocuments() {
+            return getFilteredDocuments().filter(doc => doc.status_category !== "approved");
+        }
+
+        function getApprovedDocuments() {
+            return getFilteredDocuments().filter(doc => doc.status_category === "approved");
+        }
+
+        function renderSummary(data) {
+            const pendingCount = allDocuments.filter(doc => doc.status_category !== "approved").length;
+            const approvedCount = allDocuments.filter(doc => doc.status_category === "approved").length;
+            document.getElementById("summary-status").textContent = data?.indexing_status ? `문서 현황 ${data.indexing_status}` : "문서 현황 확인 중";
+            document.getElementById("summary-total").textContent = String(allDocuments.length);
+            document.getElementById("summary-pending").textContent = String(pendingCount);
+            document.getElementById("summary-approved").textContent = String(approvedCount);
+            document.getElementById("pending-chip").textContent = `${pendingCount}건`;
+            document.getElementById("approved-chip").textContent = `${approvedCount}건`;
+        }
+
+        function renderDepartmentFilters() {
+            const container = document.getElementById("department-filters");
+            const counts = {};
+            allDocuments.forEach(doc => {
+                const name = String(doc.department || "미지정");
+                counts[name] = (counts[name] || 0) + 1;
+            });
+
+            const items = [
+                { key: ALL_DEPARTMENT, label: "전체 문서", count: allDocuments.length },
+                ...Object.keys(counts).sort().map(name => ({ key: name, label: name, count: counts[name] }))
+            ];
+
+            container.innerHTML = items.map(item => `
+                <button class="filter-item${item.key === activeDepartment ? " active" : ""}" type="button" data-key="${esc(item.key)}">
+                    <span>${esc(item.label)}</span>
+                    <span class="count-badge">${esc(String(item.count))}</span>
+                </button>
+            `).join("");
+
+            container.querySelectorAll("[data-key]").forEach(button => {
+                button.addEventListener("click", () => {
+                    activeDepartment = button.dataset.key || ALL_DEPARTMENT;
+                    renderDepartmentFilters();
+                    renderDocumentLists();
+                });
+            });
+        }
+
+        function renderSelectionState() {
+            const count = selectedIds.size;
+            document.getElementById("selection-count").textContent = `${count}개 선택됨`;
+            document.getElementById("selection-hint").textContent =
+                count > 0 ? "선택한 파일들을 한 번에 승인할 수 있습니다." : "승인 대기 파일을 선택하면 여기서 한 번에 처리할 수 있습니다.";
+        }
+
+        function cardMeta(doc) {
+            const parts = [
+                `${doc.department || "미지정"} 부서`,
+                doc.uploader_id ? `업로더 ${doc.uploader_id}` : null,
+                doc.chunk_count ? `${doc.chunk_count} chunks` : null,
+                doc.file_size_bytes ? formatBytes(doc.file_size_bytes) : null
+            ].filter(Boolean);
+            return parts.join(" · ");
+        }
+
+        function renderDocCard(doc, options) {
+            const checked = selectedIds.has(doc.doc_id) ? "checked" : "";
+            const statusClass = doc.status_category || "pending";
+            const visibility = String(doc.visibility || "public").toLowerCase();
+            const visibleDepartments = Array.isArray(doc.visible_departments) ? doc.visible_departments : [];
+            const approvedMeta = doc.approved_at || doc.approved_by
+                ? `<div class="mini">승인 ${esc(doc.approved_by || "-")} · ${esc(formatDate(doc.approved_at))}</div>`
+                : "";
+            const checkbox = options.selectable
+                ? `<input class="doc-check" type="checkbox" data-doc-id="${esc(doc.doc_id || "")}" ${checked}>`
+                : "";
+
+            return `
+                <article class="doc-card">
+                    ${checkbox || '<div></div>'}
+                    <div class="doc-main">
+                        <div class="doc-title">${esc(doc.source || "이름 없는 파일")}</div>
+                        <div class="doc-meta">
+                            <span class="chip ${esc(statusClass)}">${esc(doc.status || "승인 대기")}</span>
+                            <span class="chip soft">${esc(doc.source_type || "upload")}</span>
+                            <span class="chip soft">${esc(visibility)}</span>
+                            ${visibility === "private" ? `<span class="chip soft">${esc(visibleDepartments.join(", ") || "부서 미지정")}</span>` : ""}
+                            <span class="chip soft">${esc(doc.access_level || "전체 공개")}</span>
+                        </div>
+                        <div class="doc-description">${esc(cardMeta(doc) || "문서 메타데이터가 없습니다.")}</div>
+                    </div>
+                    <div class="doc-side">
+                        <div class="label">업로드 시각</div>
+                        <div class="value">${esc(formatDate(doc.uploaded_at || doc.updated_at))}</div>
+                        ${approvedMeta}
+                    </div>
+                </article>
+            `;
+        }
+
+        function renderDocumentLists() {
+            const pendingDocs = getPendingDocuments();
+            const approvedDocs = getApprovedDocuments();
+            const pendingList = document.getElementById("pending-list");
+            const approvedList = document.getElementById("approved-list");
+            const pendingEmpty = document.getElementById("pending-empty");
+            const approvedEmpty = document.getElementById("approved-empty");
+
+            pendingList.innerHTML = pendingDocs.map(doc => renderDocCard(doc, { selectable: true })).join("");
+            approvedList.innerHTML = approvedDocs.map(doc => renderDocCard(doc, { selectable: false })).join("");
+
+            pendingEmpty.classList.toggle("hidden", pendingDocs.length > 0);
+            approvedEmpty.classList.toggle("hidden", approvedDocs.length > 0);
+
+            pendingList.querySelectorAll("[data-doc-id]").forEach(input => {
+                input.addEventListener("change", event => {
+                    const docId = event.target.dataset.docId || "";
+                    if (!docId) return;
+                    if (event.target.checked) selectedIds.add(docId);
+                    else selectedIds.delete(docId);
+                    renderSelectionState();
+                });
+            });
+
+            renderSelectionState();
+        }
+
+        async function loadDocuments() {
+            const response = await fetch(API + "/admin/documents", { credentials: "same-origin" });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                throw new Error(data.detail || "문서 목록을 불러오지 못했습니다.");
+            }
+
+            allDocuments = Array.isArray(data.documents) ? data.documents : [];
+            alerts = Array.isArray(data.alerts) ? data.alerts : [];
+            renderSummary(data.summary || {});
+            renderDepartmentFilters();
+            renderDocumentLists();
+            renderAlerts();
+        }
+
+        async function approveSelected() {
+            const docIds = Array.from(selectedIds);
+            if (!docIds.length) {
+                pushAlert("warning", "먼저 승인할 파일을 선택해 주세요.");
+                return;
+            }
+
+            const response = await fetch(API + "/admin/documents/approve", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ doc_ids: docIds })
+            });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                pushAlert("warning", data.detail || "문서 승인에 실패했습니다.");
+                return;
+            }
+
+            selectedIds.clear();
+            pushAlert("success", `${data.approved_count || 0}개 파일을 승인했습니다.`);
+            await loadDocuments();
+        }
+
+        async function uploadAdminDocument() {
+            const fileInput = document.getElementById("upload-file");
+            const department = document.getElementById("upload-department").value;
+            const visibility = document.getElementById("upload-visibility").value;
+            const visibleDepartments = getSelectedVisibleDepartments();
+            const file = fileInput.files && fileInput.files[0];
+
+            if (!file) {
+                setUploadFeedback("warning", "업로드할 파일을 먼저 선택해 주세요.");
+                pushAlert("warning", "업로드할 파일을 먼저 선택해 주세요.");
+                fileInput.focus();
+                return;
+            }
+            if (!DEPARTMENTS.includes(department)) {
+                setUploadFeedback("warning", "업로드 대상 부서를 선택해 주세요.");
+                pushAlert("warning", "업로드 대상 부서를 선택해 주세요.");
+                return;
+            }
+            if (visibility === "private" && visibleDepartments.length === 0) {
+                setUploadFeedback("warning", "private 문서는 최소 한 개 이상의 부서를 선택해야 합니다.");
+                pushAlert("warning", "private 문서는 최소 한 개 이상의 부서를 선택해야 합니다.");
+                return;
+            }
+
+            const button = document.getElementById("upload-submit-btn");
+            button.disabled = true;
+            const originalLabel = button.textContent;
+            button.textContent = "업로드 중...";
+            setUploadFeedback("info", `${file.name} 분석 및 업로드 중입니다. 큰 파일은 시간이 조금 걸릴 수 있습니다.`);
+
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("department", department);
+            formData.append("visibility", visibility);
+            formData.append("visible_departments", visibleDepartments.join(","));
+
+            const response = await fetch(API + "/admin/upload", {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin"
+            });
+            const data = await readJsonSafe(response);
+            button.disabled = false;
+            button.textContent = originalLabel;
+
+            if (!response.ok) {
+                setUploadFeedback("warning", data.detail || "문서 업로드에 실패했습니다.");
+                pushAlert("warning", data.detail || "문서 업로드에 실패했습니다.");
+                return;
+            }
+
+            fileInput.value = "";
+            syncVisibilityControls();
+            setUploadFeedback("success", `${data.filename || "문서"} 업로드 완료${visibility === "private" ? ` · 공개 부서 ${visibleDepartments.join(", ")}` : ""}`);
+            pushAlert("success", `${data.filename || "문서"} 업로드 완료 · ${visibility}${visibility === "private" ? ` · ${visibleDepartments.join(", ")}` : ""}`);
+            await loadDocuments();
+        }
+
+        async function bootstrap() {
             const user = await fetchCurrentUser();
             if (!user) {
                 window.location.replace("/files/login");
@@ -213,10 +1020,39 @@
                 window.location.replace("/files/user");
                 return;
             }
-            document.getElementById("user-name").textContent = user.username || "-";
-            document.getElementById("user-role").textContent = roleDisplayLabel(user.role);
-            document.getElementById("user-department").textContent = user.department || "-";
-        })();
+
+            currentUser = user;
+            document.getElementById("current-user").textContent = user.username || "-";
+            document.getElementById("meta-username").textContent = user.username || "-";
+            document.getElementById("meta-role").textContent = roleLabel(user.role);
+            document.getElementById("meta-department").textContent = user.department || "ALL";
+
+            await loadDocuments();
+        }
+
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        document.getElementById("refresh-btn").addEventListener("click", loadDocuments);
+        document.getElementById("upload-submit-btn").addEventListener("click", uploadAdminDocument);
+        document.getElementById("upload-file").addEventListener("change", event => {
+            const file = event.target.files && event.target.files[0];
+            if (!file) {
+                setUploadFeedback("info", "파일을 선택한 뒤 업로드 버튼을 누르면 여기서 진행 상태를 바로 보여줍니다.");
+                return;
+            }
+            setUploadFeedback("info", `선택된 파일: ${file.name}`);
+        });
+        document.getElementById("upload-visibility").addEventListener("change", syncVisibilityControls);
+        document.getElementById("clear-selection-btn").addEventListener("click", () => {
+            selectedIds.clear();
+            renderDocumentLists();
+        });
+        document.getElementById("approve-selected-btn").addEventListener("click", approveSelected);
+        document.getElementById("search-input").addEventListener("input", renderDocumentLists);
+        syncVisibilityControls();
+
+        bootstrap().catch(error => {
+            pushAlert("warning", error.message || "관리자 화면을 불러오지 못했습니다.");
+        });
     </script>
 </body>
 </html>
