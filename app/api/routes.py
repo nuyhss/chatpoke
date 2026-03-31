@@ -150,6 +150,39 @@ def _normalize_visible_departments(
     return []
 
 
+def _normalize_scope_rules(value: Optional[str]) -> List[dict]:
+    if not isinstance(value, str) or not value.strip():
+        return []
+    try:
+        raw_rules = json.loads(value)
+    except Exception:
+        return []
+    if not isinstance(raw_rules, list):
+        return []
+
+    normalized_rules = []
+    for item in raw_rules:
+        if not isinstance(item, dict):
+            continue
+        visibility = _normalize_visibility(item.get("visibility"), item.get("department"))
+        department = str(item.get("department") or "").strip()
+        if visibility == "public":
+            department = "ALL"
+        else:
+            department = _normalize_department(department) or ""
+            if not department or department == "ALL":
+                continue
+        rank = str(item.get("rank") or "").strip() or "전체"
+        normalized_rules.append(
+            {
+                "visibility": visibility,
+                "department": department,
+                "rank": rank,
+            }
+        )
+    return normalized_rules
+
+
 def _build_admin_document_payload(entry: dict) -> dict:
     raw_source_path = str(entry.get("source_path") or "").strip()
     source_path = Path(raw_source_path).expanduser() if raw_source_path else None
@@ -198,6 +231,7 @@ def _build_admin_document_payload(entry: dict) -> dict:
         "department_only": bool(entry.get("department_only")),
         "visibility": visibility,
         "visible_departments": visible_departments,
+        "scope_rules": entry.get("scope_rules") or [],
         "languages": entry.get("languages") or [],
         "extractors_used": entry.get("extractors_used") or [],
         "input_type": entry.get("input_type"),
@@ -555,6 +589,7 @@ async def upload_department_document(
     job_level: Optional[str] = Form(default=None),
     department_only: bool = Form(default=False),
     visible_departments: Optional[str] = Form(default=None),
+    scope_rules: Optional[str] = Form(default=None),
     current_user: AuthUser = Depends(require_admin),
 ):
     normalized_department = _normalize_department(department)
@@ -576,13 +611,36 @@ async def upload_department_document(
     target_dir.mkdir(parents=True, exist_ok=True)
     save_path = target_dir / safe_filename
     normalized_admin_id = current_user.username
-    normalized_visibility = _normalize_visibility(visibility, normalized_department)
-    normalized_visible_departments = _normalize_visible_departments(
-        visible_departments,
-        fallback_department=normalized_department,
-        visibility=normalized_visibility,
-    )
-    normalized_access_level = _coerce_access_level(access_level or job_level)
+    normalized_scope_rules = _normalize_scope_rules(scope_rules)
+    if normalized_scope_rules:
+        normalized_visibility = normalized_scope_rules[0]["visibility"]
+        normalized_visible_departments = sorted(
+            {
+                rule["department"]
+                for rule in normalized_scope_rules
+                if rule.get("visibility") == "private" and rule.get("department")
+            }
+        )
+        if normalized_visibility == "public":
+            normalized_department = "ALL"
+        elif len(normalized_visible_departments) == 1:
+            normalized_department = normalized_visible_departments[0]
+        else:
+            normalized_department = "MULTI"
+        rank_values = []
+        for rule in normalized_scope_rules:
+            rank = str(rule.get("rank") or "").strip() or "전체"
+            if rank not in rank_values:
+                rank_values.append(rank)
+        normalized_access_level = " · ".join(rank_values) if rank_values else _coerce_access_level(access_level or job_level)
+    else:
+        normalized_visibility = _normalize_visibility(visibility, normalized_department)
+        normalized_visible_departments = _normalize_visible_departments(
+            visible_departments,
+            fallback_department=normalized_department,
+            visibility=normalized_visibility,
+        )
+        normalized_access_level = _coerce_access_level(access_level or job_level)
     normalized_department_only = bool(department_only or normalized_visibility == "private")
 
     try:
@@ -614,6 +672,7 @@ async def upload_department_document(
                     "uploader_id": normalized_admin_id,
                     "visibility": normalized_visibility,
                     "visible_departments": normalized_visible_departments,
+                    "scope_rules": normalized_scope_rules,
                     "access_level": normalized_access_level,
                     "department_only": normalized_department_only,
                 },
@@ -626,6 +685,7 @@ async def upload_department_document(
             "department": normalized_department,
             "visibility": normalized_visibility,
             "visible_departments": normalized_visible_departments,
+            "scope_rules": normalized_scope_rules,
             "access_level": normalized_access_level,
             "department_only": normalized_department_only,
             "chunks_stored": result.get("count", 0),
