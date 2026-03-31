@@ -4,6 +4,7 @@ import hmac
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from app.config import DATA_DIR
@@ -18,6 +19,7 @@ ROLE_USER = "user"
 ADMIN_ROLES = {ROLE_SUPER_ADMIN, ROLE_ADMIN}
 VALID_ROLES = {ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER}
 VALID_DEPARTMENTS = {"RD", "MD", "OD"}
+_BOOTSTRAP_LOCK = Lock()
 
 DEFAULT_USERS = (
     {"username": "admin", "password": "admin123", "role": ROLE_ADMIN, "department": "ALL"},
@@ -186,10 +188,12 @@ def _bootstrap(conn: sqlite3.Connection) -> None:
 
 def _connect() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(AUTH_DB_PATH)
+    conn = sqlite3.connect(AUTH_DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    _bootstrap(conn)
+    with _BOOTSTRAP_LOCK:
+        _bootstrap(conn)
+        conn.commit()
     return conn
 
 

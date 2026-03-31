@@ -948,6 +948,62 @@ def approve_admin_documents(
     }
 
 
+@router.post("/admin/documents/reject")
+def reject_admin_documents(
+    payload: dict = Body(...),
+    _: AuthUser = Depends(require_admin),
+):
+    doc_ids = payload.get("doc_ids") if isinstance(payload, dict) else None
+    if not isinstance(doc_ids, list):
+        raise HTTPException(status_code=400, detail="'doc_ids' must be an array.")
+
+    normalized_doc_ids = [
+        str(doc_id).strip()
+        for doc_id in doc_ids
+        if str(doc_id).strip()
+    ]
+    if not normalized_doc_ids:
+        raise HTTPException(status_code=400, detail="반려할 문서를 하나 이상 선택해 주세요.")
+
+    rejected_count = 0
+    missing_doc_ids = []
+    skipped_doc_ids = []
+
+    for doc_id in normalized_doc_ids:
+        existing = get_document(doc_id)
+        if existing is None:
+            missing_doc_ids.append(doc_id)
+            continue
+
+        raw_status = str(existing.get("status") or "").strip().lower()
+        if raw_status == "approved":
+            skipped_doc_ids.append(doc_id)
+            continue
+
+        _delete_managed_document(
+            source=existing.get("source"),
+            doc_id=doc_id,
+            source_type=existing.get("source_type"),
+            owner_id=existing.get("owner_id"),
+        )
+        rejected_count += 1
+
+    if rejected_count == 0:
+        if skipped_doc_ids:
+            raise HTTPException(status_code=400, detail="이미 승인된 문서는 반려할 수 없습니다.")
+        raise HTTPException(status_code=404, detail="선택한 문서를 찾지 못했습니다.")
+
+    return {
+        "rejected_count": rejected_count,
+        "rejected_doc_ids": [
+            doc_id for doc_id in normalized_doc_ids
+            if doc_id not in set(missing_doc_ids) and doc_id not in set(skipped_doc_ids)
+        ],
+        "missing_doc_ids": missing_doc_ids,
+        "skipped_doc_ids": skipped_doc_ids,
+    }
+
+
 @router.get("/docs-list")
 def docs_list(current_user: AuthUser = Depends(require_admin)):
     try:
