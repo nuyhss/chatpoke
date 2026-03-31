@@ -704,6 +704,8 @@
 
     <script>
         const API = window.location.origin;
+        const AUTH_CONTEXT = "files_user";
+        const SESSION_TOKEN_KEY = "tilon_files_user_session_token";
         const ADMIN_ROLES = new Set(["adminD", "admin"]);
         const STATUS_ALL = "all";
         const STATUS_ORDER = [STATUS_ALL, "pending", "approved", "rejected"];
@@ -726,6 +728,25 @@
         let uploadDepartment = "ALL";
         let uploadRank = RANKS[0];
         let selectedScopes = [];
+
+        function getSessionToken() {
+            return sessionStorage.getItem(SESSION_TOKEN_KEY) || "";
+        }
+
+        function buildAuthHeaders(extraHeaders = {}) {
+            const headers = { ...extraHeaders, "X-Auth-Context": AUTH_CONTEXT };
+            const token = getSessionToken();
+            if (token) headers["X-Session-Token"] = token;
+            return headers;
+        }
+
+        function authFetch(url, options = {}) {
+            return fetch(url, {
+                credentials: "same-origin",
+                ...options,
+                headers: buildAuthHeaders(options.headers || {})
+            });
+        }
 
         function requestStorageKey() {
             return `${REQUEST_KEY_PREFIX}:${currentUser?.username || currentUser?.id || "guest"}`;
@@ -1046,7 +1067,7 @@
 
         async function fetchCurrentUser() {
             try {
-                const response = await fetch(API + "/auth/me", { credentials: "same-origin" });
+                const response = await authFetch(API + "/auth/me");
                 if (!response.ok) return null;
                 const data = await readJsonSafe(response);
                 return data.user || null;
@@ -1057,11 +1078,11 @@
 
         async function logout() {
             try {
-                await fetch(API + "/auth/logout", {
-                    method: "POST",
-                    credentials: "same-origin"
+                await authFetch(API + "/auth/logout", {
+                    method: "POST"
                 });
             } catch {}
+            sessionStorage.removeItem(SESSION_TOKEN_KEY);
             window.location.replace("/files/login");
         }
 

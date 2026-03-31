@@ -5,9 +5,12 @@ from pydantic import BaseModel
 
 from app.api.deps import (
     AuthUser,
+    CHAT_AUTH_CONTEXT,
+    FILES_ADMIN_AUTH_CONTEXT,
+    FILES_USER_AUTH_CONTEXT,
     clear_session_cookie,
     get_current_user,
-    get_optional_user,
+    get_user_from_request_context,
     require_admin,
     set_session_cookie,
 )
@@ -45,6 +48,19 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+def _resolve_login_context(login_type: str, role: str) -> str:
+    normalized = (login_type or "").strip().lower()
+    if normalized == "chat":
+        return CHAT_AUTH_CONTEXT
+    if normalized == "files":
+        return FILES_ADMIN_AUTH_CONTEXT if role in ADMIN_ROLES else FILES_USER_AUTH_CONTEXT
+    if normalized == "admin":
+        return FILES_ADMIN_AUTH_CONTEXT
+    if normalized == "employee":
+        return CHAT_AUTH_CONTEXT
+    return CHAT_AUTH_CONTEXT
+
+
 @router.post("/login")
 def login(payload: LoginRequest, response: Response):
     user = authenticate_user(payload.username, payload.password)
@@ -58,8 +74,9 @@ def login(payload: LoginRequest, response: Response):
         raise HTTPException(status_code=403, detail="직원 로그인에는 user 권한 계정이 필요합니다.")
 
     token = create_session(user["username"])
-    set_session_cookie(response, token)
+    set_session_cookie(response, token, _resolve_login_context(login_type, user["role"]))
     return {
+        "session_token": token,
         "user": {
             "id": user["username"],
             "username": user["username"],
@@ -70,15 +87,29 @@ def login(payload: LoginRequest, response: Response):
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response, user: Optional[AuthUser] = Depends(get_optional_user)):
+def logout(request: Request, response: Response):
+    context = (
+        request.headers.get("X-Auth-Context")
+        or request.query_params.get("auth_context")
+        or ""
+    ).strip().lower()
+    header_token = (request.headers.get("X-Session-Token") or "").strip()
+    user = get_user_from_request_context(request, context or None)
     if user:
-        delete_session(request.cookies.get("tilon_session", ""))
-    clear_session_cookie(response)
+        if header_token:
+            delete_session(header_token)
+        else:
+            from app.api.deps import get_cookie_name_for_context
+            delete_session(request.cookies.get(get_cookie_name_for_context(context or CHAT_AUTH_CONTEXT), ""))
+    clear_session_cookie(response, context or CHAT_AUTH_CONTEXT)
     return {"ok": True}
 
 
 @router.get("/me")
-def me(user: AuthUser = Depends(get_current_user)):
+def me(request: Request):
+    user = get_user_from_request_context(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     return {
         "user": {
             "id": user.username,

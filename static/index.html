@@ -295,6 +295,8 @@
 
 <script>
     const API = window.location.origin;
+    const AUTH_CONTEXT = 'chat';
+    const SESSION_TOKEN_KEY = 'tilon_chat_session_token';
 
     const DOC_KEY_PREFIX = 'ai_uploaded_docs';
     const SYS_PROMPT_KEY_PREFIX = 'ai_sys_prompt';
@@ -328,6 +330,25 @@
         }
     }
 
+    function getSessionToken() {
+        return sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
+    }
+
+    function buildAuthHeaders(extraHeaders = {}) {
+        const headers = { ...extraHeaders, 'X-Auth-Context': AUTH_CONTEXT };
+        const token = getSessionToken();
+        if (token) headers['X-Session-Token'] = token;
+        return headers;
+    }
+
+    function authFetch(url, options = {}) {
+        return fetch(url, {
+            credentials: 'same-origin',
+            ...options,
+            headers: buildAuthHeaders(options.headers || {})
+        });
+    }
+
     function showLoginError(message) {
         const errorEl = document.getElementById('li-err');
         errorEl.textContent = message || '로그인에 실패했습니다.';
@@ -336,7 +357,7 @@
 
     async function fetchCurrentUser() {
         try {
-            const response = await fetch(API + '/auth/me', { credentials: 'same-origin' });
+            const response = await authFetch(API + '/auth/me');
             if (!response.ok) return null;
             const data = await readJsonSafe(response);
             return data.user || null;
@@ -594,7 +615,7 @@
         currentChatId = null;
 
         try {
-            const response = await fetch(uiChatsStateUrl());
+            const response = await authFetch(uiChatsStateUrl());
             const payload = await response.json().catch(() => ({}));
             if (response.ok) {
                 chats = deserializeChatsFromServer(payload.chats);
@@ -626,7 +647,7 @@
 
     function saveChats() {
         if (!currentUser) return;
-        fetch(uiChatsStateUrl(), {
+        authFetch(uiChatsStateUrl(), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chats: serializeChatsForServer() })
@@ -684,6 +705,10 @@
             }
 
             const user = data.user || {};
+            sessionStorage.removeItem(SESSION_TOKEN_KEY);
+            if (data.session_token) {
+                sessionStorage.setItem(SESSION_TOKEN_KEY, data.session_token);
+            }
             if (ADMIN_ROLES.has(user.role)) {
                 sessionStorage.setItem(LOGIN_REDIRECT_KEY, 'admin');
                 window.location.href = '/admin';
@@ -729,11 +754,11 @@
     async function doLogout() {
         if (shelfUploadInProgress) stopShelfUpload();
         try {
-            await fetch(API + '/auth/logout', {
+            await authFetch(API + '/auth/logout', {
                 method: 'POST',
-                credentials: 'same-origin'
             });
         } catch {}
+        sessionStorage.removeItem(SESSION_TOKEN_KEY);
         currentUser = null;
         chats = [];
         uploadedDocs = [];
@@ -1058,7 +1083,7 @@
             query.set('source', doc.source);
 
             if (currentUser?.id) query.set('user_id', currentUser.id);
-            const res = await fetch(API + '/upload-document?' + query.toString(), { method: 'DELETE' });
+            const res = await authFetch(API + '/upload-document?' + query.toString(), { method: 'DELETE' });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
                 if (res.status === 404) {
@@ -1091,7 +1116,7 @@
         try {
             const query = new URLSearchParams();
             if (currentUser?.id) query.set('user_id', currentUser.id);
-            const res = await fetch(API + '/docs-list' + (query.toString() ? ('?' + query.toString()) : ''));
+            const res = await authFetch(API + '/docs-list' + (query.toString() ? ('?' + query.toString()) : ''));
             if (!res.ok) return;
             const data = await res.json();
             const grouped = new Map();
@@ -1161,7 +1186,7 @@
                     if (currentUser?.id) fd.append('user_id', currentUser.id);
                     shelfUploadAbortController = new AbortController();
 
-                    const res = await fetch(API + '/upload', {
+                    const res = await authFetch(API + '/upload', {
                         method: 'POST',
                         body: fd,
                         signal: shelfUploadAbortController.signal
@@ -1340,7 +1365,7 @@
                 department: undefined
             };
 
-            const res = await fetch(API + '/chat', {
+            const res = await authFetch(API + '/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 signal: abortController.signal,

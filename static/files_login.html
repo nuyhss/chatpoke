@@ -110,6 +110,8 @@
     </div>
     <script>
         const API = window.location.origin;
+        const FILES_USER_SESSION_TOKEN_KEY = "tilon_files_user_session_token";
+        const FILES_ADMIN_SESSION_TOKEN_KEY = "tilon_files_admin_session_token";
 
         async function readJsonSafe(response) {
             try {
@@ -144,7 +146,16 @@
                 document.getElementById("li-pw").value = "";
                 return;
             }
+            sessionStorage.removeItem(FILES_USER_SESSION_TOKEN_KEY);
+            sessionStorage.removeItem(FILES_ADMIN_SESSION_TOKEN_KEY);
             const role = data.user?.role || "";
+            if (data.session_token) {
+                if (role === "adminD" || role === "admin") {
+                    sessionStorage.setItem(FILES_ADMIN_SESSION_TOKEN_KEY, data.session_token);
+                } else {
+                    sessionStorage.setItem(FILES_USER_SESSION_TOKEN_KEY, data.session_token);
+                }
+            }
             const nextPath = role === "adminD" || role === "admin" ? "/files/admin" : "/files/user";
             window.location.replace(nextPath);
         }

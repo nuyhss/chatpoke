@@ -1,10 +1,14 @@
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.api.deps import AuthUser, get_optional_user
+from app.api.deps import (
+    FILES_ADMIN_AUTH_CONTEXT,
+    FILES_USER_AUTH_CONTEXT,
+    get_user_from_request_context,
+)
 from app.core.auth_store import is_admin_role
 
 logger = logging.getLogger("tilon.files_ui")
@@ -36,11 +40,14 @@ def files_login_ui():
 
 
 @router.get("/files", include_in_schema=False)
-def files_root(user: AuthUser | None = Depends(get_optional_user)):
+def files_root(request: Request):
+    admin_user = get_user_from_request_context(request, FILES_ADMIN_AUTH_CONTEXT)
+    if admin_user and is_admin_role(admin_user.role):
+        return RedirectResponse(url="/files/admin", status_code=307)
+
+    user = get_user_from_request_context(request, FILES_USER_AUTH_CONTEXT)
     if not user:
         return RedirectResponse(url="/files/login", status_code=307)
-    if is_admin_role(user.role):
-        return RedirectResponse(url="/files/admin", status_code=307)
     return RedirectResponse(url="/files/user", status_code=307)
 
 

@@ -116,6 +116,7 @@
     </div>
     <script>
         const API = window.location.origin;
+        const SESSION_TOKEN_KEY = "tilon_chat_session_token";
 
         async function readJsonSafe(response) {
             try {
@@ -149,6 +150,10 @@
                 showLoginError(data.detail || "로그인에 실패했습니다.");
                 document.getElementById("li-pw").value = "";
                 return;
+            }
+            sessionStorage.removeItem(SESSION_TOKEN_KEY);
+            if (data.session_token) {
+                sessionStorage.setItem(SESSION_TOKEN_KEY, data.session_token);
             }
             window.location.replace("/chat");
         }
