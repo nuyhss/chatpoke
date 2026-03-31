@@ -4,169 +4,1036 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>틸론AI 파일 업로드</title>
-    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
-            --bg: #f5f7fb;
-            --panel: rgba(255,255,255,.94);
-            --panel-2: #f3f6fb;
-            --border: #d9e2f0;
-            --text: #10213a;
-            --subtle: #5d6c83;
-            --accent: #2563eb;
-            --accent-2: #3b82f6;
+            --bg:#f4f7fb;
+            --surface:#fff;
+            --line:#dbe3ee;
+            --text:#0f172a;
+            --muted:#64748b;
+            --blue:#2563eb;
+            --green:#16a34a;
+            --orange:#d97706;
+            --red:#ef4444;
+            --slate:#475569;
+            --shadow:0 18px 48px rgba(15,23,42,.08);
+            --radius:24px;
         }
+        * { box-sizing:border-box; }
+        html, body { margin:0; min-height:100%; }
         body {
-            font-family: 'Pretendard', -apple-system, sans-serif;
-            background: linear-gradient(180deg, #f8fbff 0%, #eef3fb 100%);
-            color: var(--text);
-            min-height: 100vh;
-            padding: 24px;
+            font-family:"IBM Plex Sans KR",sans-serif;
+            background:linear-gradient(180deg,#f8fbff 0%,var(--bg) 100%);
+            color:var(--text);
         }
-        .shell { max-width: 1180px; margin: 0 auto; }
-        .topbar, .card {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+        button, input { font:inherit; }
+        .app-shell { min-height:100vh; padding:20px; }
+        .panel, .topbar, .status-strip, .table-shell, .upload-card {
+            background:rgba(255,255,255,.95);
+            border:1px solid var(--line);
+            box-shadow:var(--shadow);
         }
         .topbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 16px;
-            padding: 22px 24px;
-            margin-bottom: 18px;
+            border-radius:var(--radius);
+            padding:22px 26px;
+            display:grid;
+            grid-template-columns:1.2fr 1fr;
+            gap:18px;
+            align-items:center;
         }
-        .brand { display: flex; align-items: center; gap: 14px; }
-        .brand img { width: 46px; height: auto; }
-        .brand h1 { font-size: 28px; margin-bottom: 4px; }
-        .brand p { font-size: 14px; color: var(--subtle); }
-        .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .title-wrap { display:flex; align-items:center; gap:14px; min-width:0; }
+        .title-icon {
+            width:50px;
+            height:50px;
+            border-radius:16px;
+            background:linear-gradient(135deg,#1d4ed8,#60a5fa);
+            color:#fff;
+            display:grid;
+            place-items:center;
+            font-size:24px;
+            flex-shrink:0;
+        }
+        .title-copy h1 {
+            margin:0;
+            font-size:34px;
+            line-height:1.1;
+            letter-spacing:-.03em;
+        }
+        .toolbar {
+            display:flex;
+            flex-wrap:wrap;
+            justify-content:flex-end;
+            gap:12px;
+        }
+        .search-input,
+        .field input {
+            width:100%;
+            padding:14px 16px;
+            border:1px solid var(--line);
+            border-radius:16px;
+            background:#fff;
+            color:var(--text);
+            outline:none;
+        }
+        .search-input {
+            min-width:280px;
+            flex:1 1 280px;
+        }
         .btn {
-            border: 1px solid var(--border);
-            background: #fff;
-            color: var(--subtle);
-            padding: 10px 14px;
-            border-radius: 10px;
-            cursor: pointer;
-            font: inherit;
+            border:1px solid var(--line);
+            background:#fff;
+            color:var(--text);
+            border-radius:16px;
+            padding:13px 18px;
+            cursor:pointer;
+            white-space:nowrap;
         }
-        .btn:hover { border-color: var(--accent); color: var(--accent); }
-        .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
-        .grid {
-            display: grid;
-            grid-template-columns: 1.2fr .8fr;
-            gap: 18px;
+        .btn.primary {
+            background:linear-gradient(135deg,#2563eb,#3b82f6);
+            color:#fff;
+            border-color:transparent;
         }
-        .card { padding: 24px; }
-        .card h2 { font-size: 22px; margin-bottom: 12px; }
-        .card p { color: var(--subtle); line-height: 1.7; }
-        .placeholder {
-            margin-top: 18px;
-            border: 1px dashed var(--border);
-            border-radius: 16px;
-            background: var(--panel-2);
-            min-height: 260px;
-            display: grid;
-            place-items: center;
-            text-align: center;
-            padding: 24px;
-            color: var(--subtle);
-            line-height: 1.8;
+        .btn.subtle { background:#f8fafc; }
+        .btn.danger {
+            color:var(--red);
+            border-color:#fca5a5;
+            background:#fff5f5;
         }
-        .meta-list { display: grid; gap: 12px; }
-        .meta-item {
-            padding: 14px 16px;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            background: #fff;
+        .btn:disabled { opacity:.6; cursor:not-allowed; }
+        .status-strip {
+            margin-top:16px;
+            border-radius:20px;
+            padding:16px 22px;
+            display:flex;
+            justify-content:space-between;
+            gap:14px;
+            flex-wrap:wrap;
+            align-items:center;
         }
-        .meta-label {
-            font-size: 12px;
-            color: var(--subtle);
-            text-transform: uppercase;
-            letter-spacing: .04em;
-            margin-bottom: 4px;
+        .status-left, .status-right {
+            display:flex;
+            align-items:center;
+            gap:22px;
+            flex-wrap:wrap;
         }
-        .meta-value { font-size: 16px; font-weight: 600; }
-        .notice {
-            margin-top: 18px;
-            padding: 14px 16px;
-            border-radius: 14px;
-            background: rgba(37,99,235,.08);
-            color: var(--accent);
-            line-height: 1.7;
+        .status-pill {
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            color:var(--muted);
+            font-weight:500;
         }
-        @media (max-width: 920px) {
-            body { padding: 16px; }
-            .topbar { flex-direction: column; align-items: flex-start; }
-            .grid { grid-template-columns: 1fr; }
+        .status-pill strong {
+            color:var(--text);
+            font-size:17px;
+        }
+        .status-dot {
+            width:10px;
+            height:10px;
+            border-radius:999px;
+            background:var(--green);
+        }
+        .content-grid {
+            margin-top:18px;
+            display:grid;
+            grid-template-columns:290px minmax(0,1fr) 300px;
+            gap:18px;
+            align-items:start;
+        }
+        .panel {
+            border-radius:24px;
+            overflow:hidden;
+        }
+        .panel-head {
+            padding:22px 22px 18px;
+            border-bottom:1px solid var(--line);
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+        }
+        .panel-head h2, .panel-head h3 {
+            margin:0;
+            font-size:17px;
+        }
+        .panel-body { padding:18px; }
+        .filter-list {
+            display:flex;
+            flex-direction:column;
+            gap:10px;
+        }
+        .filter-item {
+            border:1px solid transparent;
+            background:#fff;
+            border-radius:16px;
+            padding:14px 16px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:10px;
+            cursor:pointer;
+        }
+        .filter-item.active {
+            background:linear-gradient(135deg,#2563eb,#1d4ed8);
+            color:#fff;
+        }
+        .count-badge {
+            display:inline-flex;
+            min-width:34px;
+            justify-content:center;
+            align-items:center;
+            padding:4px 10px;
+            border-radius:999px;
+            background:#eef2ff;
+            color:#1d4ed8;
+            font-weight:700;
+            font-size:13px;
+        }
+        .main-stack {
+            display:grid;
+            gap:18px;
+        }
+        .upload-card {
+            border-radius:24px;
+            padding:22px 24px;
+            border-style:dashed;
+            background:linear-gradient(180deg,#ffffff,#f7faff);
+        }
+        .upload-card h2 {
+            margin:0;
+            font-size:22px;
+        }
+        .upload-steps {
+            display:grid;
+            grid-template-columns:repeat(3, minmax(0, 1fr));
+            gap:18px;
+            margin-top:18px;
+        }
+        .step-column {
+            border:1px solid var(--line);
+            border-radius:22px;
+            background:#fff;
+            padding:18px;
+            min-height:280px;
+            display:grid;
+            grid-template-rows:auto 1fr;
+            gap:14px;
+        }
+        .step-column h4 {
+            margin:0;
+            font-size:18px;
+            font-weight:700;
+            letter-spacing:-.02em;
+        }
+        .step-list {
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            max-height:220px;
+            overflow-y:auto;
+            padding-right:4px;
+        }
+        .step-option {
+            width:100%;
+            border:1px solid transparent;
+            border-radius:14px;
+            background:#fff;
+            color:var(--text);
+            text-align:left;
+            padding:13px 14px;
+            font:inherit;
+            font-weight:500;
+            cursor:pointer;
+            transition:.16s ease;
+        }
+        .step-option:hover {
+            background:#f5f8ff;
+            border-color:var(--line);
+        }
+        .step-option.active {
+            background:#f2f5fb;
+            color:var(--blue);
+        }
+        .step-option:disabled {
+            opacity:.45;
+            cursor:not-allowed;
+        }
+        .field label {
+            display:block;
+            margin-bottom:8px;
+            font-size:13px;
+            color:var(--muted);
+            font-weight:600;
+        }
+        .scope-add-row {
+            margin-top:18px;
+            display:flex;
+            justify-content:center;
+        }
+        .scope-add-btn {
+            border:1px solid #8aa7eb;
+            background:#fff;
+            color:var(--blue);
+            border-radius:999px;
+            padding:12px 28px;
+            font:inherit;
+            font-weight:600;
+            cursor:pointer;
+        }
+        .scope-summary {
+            margin-top:18px;
+            padding:18px;
+            border:1px solid var(--line);
+            border-radius:22px;
+            background:#f7fbff;
+        }
+        .scope-summary-head {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:12px;
+            margin-bottom:12px;
+            color:var(--muted);
+            font-size:14px;
+        }
+        .scope-chip-list {
+            min-height:42px;
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+        }
+        .scope-chip {
+            display:inline-flex;
+            align-items:center;
+            gap:10px;
+            border-radius:999px;
+            padding:10px 14px;
+            background:#edf4ff;
+            color:var(--blue);
+            font-weight:600;
+            font-size:13px;
+        }
+        .scope-chip button {
+            border:none;
+            background:transparent;
+            color:inherit;
+            font-size:14px;
+            cursor:pointer;
+        }
+        .upload-file-row {
+            margin-top:18px;
+        }
+        .file-input-native {
+            display:none;
+        }
+        .file-picker {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:14px;
+            padding:14px 16px;
+            border-radius:18px;
+            border:1px solid var(--line);
+            background:linear-gradient(180deg,#ffffff,#f7faff);
+            cursor:pointer;
+            transition:.18s ease;
+        }
+        .file-picker:hover {
+            border-color:var(--blue);
+            box-shadow:0 10px 22px rgba(37,99,235,.08);
+        }
+        .file-picker-copy {
+            min-width:0;
+            display:grid;
+            gap:4px;
+        }
+        .file-picker-title {
+            font-size:15px;
+            font-weight:600;
+            color:var(--text);
+        }
+        .file-picker-name {
+            font-size:13px;
+            color:var(--muted);
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+        }
+        .file-picker-btn {
+            flex-shrink:0;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-width:104px;
+            padding:10px 14px;
+            border-radius:999px;
+            background:rgba(37,99,235,.1);
+            color:var(--blue);
+            font-size:13px;
+            font-weight:600;
+        }
+        .upload-actions {
+            margin-top:16px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:16px;
+            flex-wrap:wrap;
+        }
+        .upload-note {
+            color:var(--muted);
+            font-size:14px;
+            line-height:1.6;
+        }
+        .table-shell {
+            border-radius:24px;
+            overflow:hidden;
+        }
+        .table-toolbar {
+            padding:18px 20px;
+            border-bottom:1px solid var(--line);
+            display:flex;
+            justify-content:space-between;
+            gap:12px;
+            flex-wrap:wrap;
+            align-items:center;
+        }
+        .selection-meta {
+            display:flex;
+            align-items:center;
+            gap:12px;
+            color:var(--muted);
+            font-size:14px;
+        }
+        .table-wrap { overflow-x:auto; }
+        table {
+            width:100%;
+            border-collapse:collapse;
+            min-width:820px;
+        }
+        th, td {
+            padding:16px 14px;
+            border-bottom:1px solid #edf2f7;
+            text-align:left;
+            vertical-align:middle;
+        }
+        th {
+            color:var(--muted);
+            font-size:13px;
+            background:#fbfcfe;
+            font-weight:700;
+        }
+        td { font-size:14px; }
+        .align-center { text-align:center; }
+        .doc-name {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            min-width:0;
+        }
+        .doc-title {
+            font-weight:600;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+            max-width:360px;
+        }
+        .status-badge {
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            border-radius:999px;
+            padding:6px 10px;
+            font-size:12px;
+            font-weight:700;
+        }
+        .status-badge.pending {
+            color:var(--orange);
+            background:#ffedd5;
+        }
+        .status-badge.approved {
+            color:var(--green);
+            background:#dcfce7;
+        }
+        .status-badge.rejected {
+            color:var(--red);
+            background:#fee2e2;
+        }
+        .status-badge.cancelled {
+            color:var(--slate);
+            background:#e2e8f0;
+        }
+        .row-actions {
+            display:flex;
+            gap:8px;
+            justify-content:center;
+        }
+        .mini-btn {
+            border:1px solid var(--line);
+            background:#fff;
+            color:var(--muted);
+            border-radius:12px;
+            padding:8px 10px;
+            cursor:pointer;
+        }
+        .mini-btn.danger {
+            color:var(--red);
+            border-color:#fca5a5;
+            background:#fff5f5;
+        }
+        .empty-state {
+            padding:54px 20px;
+            text-align:center;
+            color:var(--muted);
+        }
+        .info-stack {
+            display:grid;
+            gap:12px;
+        }
+        .info-card {
+            border:1px solid var(--line);
+            border-radius:18px;
+            background:#fff;
+            padding:16px;
+        }
+        .info-card h4 {
+            margin:0 0 6px;
+            font-size:13px;
+            color:var(--muted);
+        }
+        .info-card strong {
+            display:block;
+            font-size:16px;
+        }
+        .alerts-box {
+            margin-top:12px;
+            border:1px dashed #c7d2fe;
+            border-radius:18px;
+            background:#fbfdff;
+            padding:18px 16px;
+            color:var(--muted);
+            line-height:1.7;
+            min-height:120px;
+        }
+        .toast {
+            position:fixed;
+            right:24px;
+            bottom:24px;
+            background:#0f172a;
+            color:#fff;
+            border-radius:14px;
+            padding:12px 16px;
+            box-shadow:0 18px 40px rgba(15,23,42,.2);
+            opacity:0;
+            transform:translateY(10px);
+            pointer-events:none;
+            transition:all .2s ease;
+        }
+        .toast.show {
+            opacity:1;
+            transform:translateY(0);
+        }
+        @media (max-width:1360px) {
+            .content-grid {
+                grid-template-columns:280px minmax(0,1fr);
+            }
+            .right-panel {
+                grid-column:1 / -1;
+            }
+        }
+        @media (max-width:980px) {
+            .topbar { grid-template-columns:1fr; }
+            .content-grid,
+            .upload-steps { grid-template-columns:1fr; }
         }
     </style>
 </head>
 <body>
-    <div class="shell">
-        <header class="topbar">
-            <div class="brand">
-                <img src="/static/swf-logo.svg?v=2" alt="틸론AI 로고">
-                <div>
+    <div class="app-shell">
+        <section class="topbar">
+            <div class="title-wrap">
+                <div class="title-icon">📤</div>
+                <div class="title-copy">
                     <h1>파일 업로드</h1>
-                    <p>일반 사용자가 파일 업로드를 신청하는 화면입니다.</p>
                 </div>
             </div>
-            <div class="actions">
-                <button class="btn" type="button" onclick="window.location.href='/chat/login'">챗봇 사이트</button>
-                <button class="btn primary" type="button" id="logout-btn">로그아웃</button>
+            <div class="toolbar">
+                <input id="search-input" class="search-input" type="search" placeholder="내 파일 검색...">
+                <button class="btn" id="go-chat-btn" type="button">💬 채팅으로</button>
+                <button class="btn danger" id="logout-btn" type="button">로그아웃</button>
             </div>
-        </header>
+        </section>
 
-        <main class="grid">
-            <section class="card">
-                <h2>파일 업로드 신청</h2>
-                <p>이 영역에 일반 직원용 업로드 신청 UI를 붙이면 됩니다. public/private 선택, 공개 대상 지정, 신청 이력 조회 같은 기능이 여기에 들어갑니다.</p>
-                <div class="placeholder">
-                    <div>
-                        <strong>향후 구현 위치</strong><br>
-                        PDF 업로드, 공개 범위 설정, 선택 부서/선택 직원 지정, 내 신청 목록
-                    </div>
-                </div>
-            </section>
+        <section class="status-strip">
+            <div class="status-left">
+                <div class="status-pill"><span class="status-dot"></span><span>내 업로드 신청 현황</span></div>
+                <div class="status-pill">전체 <strong id="summary-total">0</strong></div>
+                <div class="status-pill">대기 <strong id="summary-pending">0</strong></div>
+                <div class="status-pill">승인 <strong id="summary-approved">0</strong></div>
+                <div class="status-pill">반려/취소 <strong id="summary-closed">0</strong></div>
+            </div>
+            <div class="status-right">
+                <span id="current-user-chip">사용자</span>
+            </div>
+        </section>
 
-            <aside class="card">
-                <h2>접속 정보</h2>
-                <div class="meta-list">
-                    <div class="meta-item">
-                        <div class="meta-label">아이디</div>
-                        <div class="meta-value" id="user-name">불러오는 중...</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">권한</div>
-                        <div class="meta-value" id="user-role">불러오는 중...</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">부서</div>
-                        <div class="meta-value" id="user-department">불러오는 중...</div>
-                    </div>
-                </div>
-                <div class="notice">
-                    관리자 권한 사용자는 자동으로 관리자 전용 파일 사이트로 이동합니다.
+        <section class="content-grid">
+            <aside class="panel">
+                <div class="panel-head"><h2>상태 필터</h2></div>
+                <div class="panel-body">
+                    <div class="filter-list" id="status-filters"></div>
                 </div>
             </aside>
-        </main>
+
+            <main class="main-stack">
+                <section class="upload-card">
+                    <h2>업로드 신청</h2>
+                    <div class="upload-steps">
+                        <section class="step-column">
+                            <h4>공개범위</h4>
+                            <div class="step-list">
+                                <button class="step-option active" type="button" data-visibility="public">public</button>
+                                <button class="step-option" type="button" data-visibility="private">private</button>
+                            </div>
+                        </section>
+                        <section class="step-column">
+                            <h4>업로드 대상 부서</h4>
+                            <div class="step-list">
+                                <button class="step-option active" type="button" data-department="ALL">전체</button>
+                                <button class="step-option" type="button" data-department="RD">RD</button>
+                                <button class="step-option" type="button" data-department="OD">OD</button>
+                                <button class="step-option" type="button" data-department="MD">MD</button>
+                                <button class="step-option" type="button" data-department="ED">ED</button>
+                            </div>
+                        </section>
+                        <section class="step-column">
+                            <h4>직급</h4>
+                            <div class="step-list">
+                                <button class="step-option active" type="button" data-rank="전체">전체</button>
+                                <button class="step-option" type="button" data-rank="사원">사원</button>
+                                <button class="step-option" type="button" data-rank="대리">대리</button>
+                                <button class="step-option" type="button" data-rank="과장">과장</button>
+                                <button class="step-option" type="button" data-rank="부장">부장</button>
+                            </div>
+                        </section>
+                    </div>
+                    <div class="scope-add-row">
+                        <button class="scope-add-btn" type="button" id="add-scope-btn">분류 추가</button>
+                    </div>
+                    <div class="scope-summary">
+                        <div class="scope-summary-head">
+                            <strong>선택 항목</strong>
+                            <span id="scope-count">0/10</span>
+                        </div>
+                        <div class="scope-chip-list" id="scope-chip-list"></div>
+                    </div>
+                    <div class="upload-file-row">
+                        <label for="upload-file">업로드 파일</label>
+                        <input id="upload-file" class="file-input-native" type="file" accept=".pdf">
+                        <label for="upload-file" class="file-picker">
+                            <div class="file-picker-copy">
+                                <span class="file-picker-title">업로드할 파일 선택</span>
+                                <span class="file-picker-name" id="upload-file-name"></span>
+                            </div>
+                            <span class="file-picker-btn">파일 선택</span>
+                        </label>
+                    </div>
+                    <div class="upload-actions">
+                        <div class="upload-note">PDF 파일만 신청할 수 있습니다.</div>
+                        <button class="btn primary" id="request-submit-btn" type="button">업로드 신청</button>
+                    </div>
+                </section>
+
+                <section class="table-shell">
+                    <div class="table-toolbar">
+                        <div class="selection-meta">
+                            <strong id="result-title">내 신청 목록</strong>
+                            <span id="result-count">0건</span>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>파일명</th>
+                                    <th>크기</th>
+                                    <th>신청일</th>
+                                    <th class="align-center">상태</th>
+                                    <th class="align-center">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="request-body"></tbody>
+                        </table>
+                        <div class="empty-state" id="request-empty">아직 업로드 신청한 파일이 없습니다.</div>
+                    </div>
+                </section>
+            </main>
+
+            <aside class="panel right-panel">
+                <div class="panel-head"><h3>사용자 정보</h3></div>
+                <div class="panel-body">
+                    <div class="info-stack">
+                        <div class="info-card">
+                            <h4>아이디</h4>
+                            <strong id="user-name">불러오는 중...</strong>
+                        </div>
+                        <div class="info-card">
+                            <h4>권한</h4>
+                            <strong id="user-role">불러오는 중...</strong>
+                        </div>
+                        <div class="info-card">
+                            <h4>부서</h4>
+                            <strong id="user-department">불러오는 중...</strong>
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;">
+                        <h3 style="margin:0 0 12px;">알림</h3>
+                        <div class="alerts-box" id="alerts-box">
+                            승인, 반려, 신청 취소 상태가 이 화면에 반영됩니다.
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </section>
     </div>
+
+    <div class="toast" id="toast"></div>
 
     <script>
         const API = window.location.origin;
         const ADMIN_ROLES = new Set(["adminD", "admin"]);
+        const STATUS_ALL = "all";
+        const STATUS_ORDER = [STATUS_ALL, "pending", "approved", "rejected"];
+        const STATUS_LABELS = {
+            all: "전체",
+            pending: "대기",
+            approved: "승인",
+            rejected: "반려",
+            cancelled: "신청 취소"
+        };
+        const REQUEST_KEY_PREFIX = "files_user_requests";
+        const DEPARTMENTS = ["ALL", "RD", "OD", "MD", "ED"];
+        const RANKS = ["전체", "사원", "대리", "과장", "부장"];
+
+        let currentUser = null;
+        let selectedFile = null;
+        let requestItems = [];
+        let activeStatus = STATUS_ALL;
+        let uploadVisibility = "public";
+        let uploadDepartment = "ALL";
+        let uploadRank = RANKS[0];
+        let selectedScopes = [];
+
+        function requestStorageKey() {
+            return `${REQUEST_KEY_PREFIX}:${currentUser?.username || currentUser?.id || "guest"}`;
+        }
+
+        function esc(value) {
+            const node = document.createElement("div");
+            node.textContent = value ?? "";
+            return node.innerHTML;
+        }
 
         function roleDisplayLabel(role) {
             if (role === "adminD") return "최고 관리자";
             if (role === "admin") return "관리자";
             if (role === "user") return "사용자";
             return role || "-";
+        }
+
+        function statusBadgeClass(status) {
+            if (status === "approved") return "approved";
+            if (status === "rejected") return "rejected";
+            if (status === "cancelled") return "cancelled";
+            return "pending";
+        }
+
+        function formatBytes(bytes) {
+            const value = Number(bytes || 0);
+            if (value < 1024) return `${value} B`;
+            if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+            return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function formatDate(dateText) {
+            const date = new Date(dateText);
+            if (Number.isNaN(date.getTime())) return "-";
+            return date.toLocaleString("ko-KR", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit"
+            });
+        }
+
+        function readRequests() {
+            try {
+                const raw = localStorage.getItem(requestStorageKey());
+                const parsed = JSON.parse(raw || "[]");
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        }
+
+        function saveRequests() {
+            localStorage.setItem(requestStorageKey(), JSON.stringify(requestItems));
+        }
+
+        function filteredRequests() {
+            const keyword = document.getElementById("search-input").value.trim().toLowerCase();
+            return requestItems.filter(item => {
+                const statusMatch = activeStatus === STATUS_ALL || item.status === activeStatus;
+                const keywordMatch = !keyword || String(item.name || "").toLowerCase().includes(keyword);
+                return statusMatch && keywordMatch;
+            });
+        }
+
+        function updateSummary() {
+            const pendingCount = requestItems.filter(item => item.status === "pending").length;
+            const approvedCount = requestItems.filter(item => item.status === "approved").length;
+            const closedCount = requestItems.filter(item => item.status === "rejected" || item.status === "cancelled").length;
+
+            document.getElementById("summary-total").textContent = String(requestItems.length);
+            document.getElementById("summary-pending").textContent = String(pendingCount);
+            document.getElementById("summary-approved").textContent = String(approvedCount);
+            document.getElementById("summary-closed").textContent = String(closedCount);
+        }
+
+        function renderStatusFilters() {
+            const counts = {
+                all: requestItems.length,
+                pending: requestItems.filter(item => item.status === "pending").length,
+                approved: requestItems.filter(item => item.status === "approved").length,
+                rejected: requestItems.filter(item => item.status === "rejected").length,
+                cancelled: requestItems.filter(item => item.status === "cancelled").length,
+            };
+
+            document.getElementById("status-filters").innerHTML = STATUS_ORDER.map(status => `
+                <div class="filter-item ${activeStatus === status ? "active" : ""}" data-status="${status}">
+                    <span>${STATUS_LABELS[status]}</span>
+                    <span class="count-badge">${counts[status]}</span>
+                </div>
+            `).join("");
+
+            document.querySelectorAll("[data-status]").forEach(button => {
+                button.addEventListener("click", () => {
+                    activeStatus = button.dataset.status || STATUS_ALL;
+                    renderStatusFilters();
+                    renderRequests();
+                });
+            });
+        }
+
+        function renderRequests() {
+            const rows = filteredRequests();
+            const body = document.getElementById("request-body");
+            const empty = document.getElementById("request-empty");
+            document.getElementById("result-count").textContent = `${rows.length}건`;
+
+            if (!rows.length) {
+                body.innerHTML = "";
+                empty.style.display = "block";
+                return;
+            }
+
+            empty.style.display = "none";
+            body.innerHTML = rows.map(item => `
+                <tr>
+                    <td>
+                        <div class="doc-name">
+                            <span>📄</span>
+                            <span class="doc-title" title="${item.name}">${item.name}</span>
+                        </div>
+                    </td>
+                    <td>${formatBytes(item.size)}</td>
+                    <td>${formatDate(item.requestedAt)}</td>
+                    <td class="align-center"><span class="status-badge ${statusBadgeClass(item.status)}">${STATUS_LABELS[item.status] || item.status}</span></td>
+                    <td class="align-center">
+                        <div class="row-actions">
+                            ${item.status === "pending" ? `<button class="mini-btn danger" type="button" data-cancel-id="${item.id}">신청 취소</button>` : `<span style="color:var(--muted); font-size:13px;">-</span>`}
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+
+            body.querySelectorAll("[data-cancel-id]").forEach(button => {
+                button.addEventListener("click", () => cancelRequest(button.dataset.cancelId || ""));
+            });
+        }
+
+        function renderAll() {
+            updateSummary();
+            renderStatusFilters();
+            renderRequests();
+        }
+
+        function cancelRequest(requestId) {
+            const index = requestItems.findIndex(item => item.id === requestId);
+            if (index < 0) return;
+            requestItems[index] = { ...requestItems[index], status: "cancelled" };
+            saveRequests();
+            renderAll();
+            toast("신청을 취소했습니다.");
+        }
+
+        function scopeKey(scope) {
+            return [scope.visibility, scope.department, scope.rank].join("::");
+        }
+
+        function scopeLabel(scope) {
+            return `${scope.visibility} > ${scope.department} > ${scope.rank}`;
+        }
+
+        function renderUploadSteps() {
+            document.querySelectorAll("[data-visibility]").forEach(button => {
+                button.classList.toggle("active", button.dataset.visibility === uploadVisibility);
+            });
+
+            document.querySelectorAll("[data-department]").forEach(button => {
+                const isAll = button.dataset.department === "ALL";
+                const isActive = button.dataset.department === uploadDepartment;
+                button.classList.toggle("active", isActive);
+                if (uploadVisibility === "public") {
+                    button.disabled = !isAll;
+                    button.style.display = "";
+                } else {
+                    button.disabled = isAll;
+                    button.style.display = isAll ? "none" : "";
+                }
+            });
+
+            document.querySelectorAll("[data-rank]").forEach(button => {
+                button.classList.toggle("active", button.dataset.rank === uploadRank);
+                button.disabled = uploadVisibility === "public" && button.dataset.rank !== RANKS[0];
+            });
+        }
+
+        function updateSelectedFileName() {
+            const label = document.getElementById("upload-file-name");
+            if (label) {
+                label.textContent = selectedFile ? selectedFile.name : "";
+            }
+        }
+
+        function renderScopeSelections() {
+            const list = document.getElementById("scope-chip-list");
+            const counter = document.getElementById("scope-count");
+            if (!list || !counter) return;
+
+            counter.textContent = `${selectedScopes.length}/10`;
+
+            if (!selectedScopes.length) {
+                list.innerHTML = "";
+                return;
+            }
+
+            list.innerHTML = selectedScopes.map(scope => `
+                <span class="scope-chip" data-scope-key="${esc(scopeKey(scope))}">
+                    <span>${esc(scopeLabel(scope))}</span>
+                    <button type="button" data-remove-scope="${esc(scopeKey(scope))}">×</button>
+                </span>
+            `).join("");
+
+            list.querySelectorAll("[data-remove-scope]").forEach(button => {
+                button.addEventListener("click", () => {
+                    const key = button.dataset.removeScope || "";
+                    selectedScopes = selectedScopes.filter(scope => scopeKey(scope) !== key);
+                    renderScopeSelections();
+                });
+            });
+        }
+
+        function setUploadVisibility(nextVisibility) {
+            uploadVisibility = nextVisibility === "private" ? "private" : "public";
+            if (uploadVisibility === "public") {
+                uploadDepartment = "ALL";
+                uploadRank = RANKS[0];
+            } else if (uploadDepartment === "ALL") {
+                uploadDepartment = DEPARTMENTS[1];
+            }
+            renderUploadSteps();
+        }
+
+        function setUploadDepartment(nextDepartment) {
+            if (!DEPARTMENTS.includes(nextDepartment)) return;
+            if (uploadVisibility === "private") {
+                uploadDepartment = nextDepartment;
+                renderUploadSteps();
+            }
+        }
+
+        function setUploadRank(nextRank) {
+            if (!RANKS.includes(nextRank)) return;
+            if (uploadVisibility === "public" && nextRank !== RANKS[0]) return;
+            uploadRank = nextRank;
+            renderUploadSteps();
+        }
+
+        function addCurrentScope() {
+            if (selectedScopes.length >= 10) {
+                toast("최대 10개까지 선택할 수 있습니다.");
+                return;
+            }
+
+            const scope = {
+                visibility: uploadVisibility,
+                department: uploadVisibility === "public" ? "전체" : uploadDepartment,
+                rank: uploadVisibility === "public" ? RANKS[0] : uploadRank
+            };
+            const key = scopeKey(scope);
+            if (selectedScopes.some(item => scopeKey(item) === key)) {
+                toast("이미 추가한 조합입니다.");
+                return;
+            }
+
+            selectedScopes.push(scope);
+            renderScopeSelections();
+        }
+
+        function resetUploadForm() {
+            selectedFile = null;
+            selectedScopes = [];
+            uploadVisibility = "public";
+            uploadDepartment = "ALL";
+            uploadRank = RANKS[0];
+            const input = document.getElementById("upload-file");
+            if (input) input.value = "";
+            updateSelectedFileName();
+            renderUploadSteps();
+            renderScopeSelections();
+        }
+
+        function submitRequests() {
+            if (!selectedFile) {
+                toast("먼저 파일을 선택해주세요.");
+                return;
+            }
+            if (!selectedScopes.length) {
+                toast("분류를 추가해주세요.");
+                return;
+            }
+
+            const now = new Date().toISOString();
+            const nextItem = {
+                id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                name: selectedFile.name,
+                size: selectedFile.size,
+                status: "pending",
+                requestedAt: now,
+                owner: currentUser.username || currentUser.id,
+                scopes: selectedScopes.map(scope => ({ ...scope }))
+            };
+
+            requestItems = [nextItem, ...requestItems];
+            saveRequests();
+            renderAll();
+            resetUploadForm();
+            toast("업로드 신청을 등록했습니다.");
         }
 
         async function readJsonSafe(response) {
@@ -198,7 +1065,36 @@
             window.location.replace("/files/login");
         }
 
-        document.getElementById("logout-btn").addEventListener("click", logout);
+        function toast(message) {
+            const node = document.getElementById("toast");
+            node.textContent = message;
+            node.classList.add("show");
+            window.clearTimeout(toast._timer);
+            toast._timer = window.setTimeout(() => node.classList.remove("show"), 1800);
+        }
+
+        function bindEvents() {
+            document.getElementById("go-chat-btn").addEventListener("click", () => {
+                window.location.href = "/chat";
+            });
+            document.getElementById("logout-btn").addEventListener("click", logout);
+            document.getElementById("upload-file").addEventListener("change", event => {
+                selectedFile = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+                updateSelectedFileName();
+            });
+            document.querySelectorAll("[data-visibility]").forEach(button => {
+                button.addEventListener("click", () => setUploadVisibility(button.dataset.visibility || "public"));
+            });
+            document.querySelectorAll("[data-department]").forEach(button => {
+                button.addEventListener("click", () => setUploadDepartment(button.dataset.department || "ALL"));
+            });
+            document.querySelectorAll("[data-rank]").forEach(button => {
+                button.addEventListener("click", () => setUploadRank(button.dataset.rank || RANKS[0]));
+            });
+            document.getElementById("add-scope-btn").addEventListener("click", addCurrentScope);
+            document.getElementById("request-submit-btn").addEventListener("click", submitRequests);
+            document.getElementById("search-input").addEventListener("input", renderRequests);
+        }
 
         (async () => {
             const user = await fetchCurrentUser();
@@ -210,9 +1106,29 @@
                 window.location.replace("/files/admin");
                 return;
             }
-            document.getElementById("user-name").textContent = user.username || "-";
-            document.getElementById("user-role").textContent = roleDisplayLabel(user.role);
-            document.getElementById("user-department").textContent = user.department || "-";
+
+            currentUser = {
+                id: user.id || user.username,
+                username: user.username || user.id,
+                role: user.role,
+                department: user.department || ""
+            };
+
+            requestItems = readRequests();
+
+            document.getElementById("current-user-chip").textContent =
+                currentUser.department && currentUser.department !== "ALL"
+                    ? `${currentUser.username} · ${currentUser.department}`
+                    : currentUser.username;
+            document.getElementById("user-name").textContent = currentUser.username || "-";
+            document.getElementById("user-role").textContent = roleDisplayLabel(currentUser.role);
+            document.getElementById("user-department").textContent = currentUser.department || "-";
+
+            bindEvents();
+            renderUploadSteps();
+            renderScopeSelections();
+            renderAll();
+            updateSelectedFileName();
         })();
     </script>
 </body>
