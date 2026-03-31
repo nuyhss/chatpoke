@@ -120,12 +120,59 @@ def _coerce_access_level(value: Optional[str]) -> str:
     return raw or "전체 공개"
 
 
+def _normalize_visibility(value: Optional[str], fallback_department: Optional[str] = None) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"public", "private"}:
+        return raw
+    normalized_department = _normalize_department(fallback_department)
+    return "private" if normalized_department and normalized_department != "ALL" else "public"
+
+
+def _normalize_visible_departments(
+    value: Optional[str],
+    fallback_department: Optional[str] = None,
+    visibility: Optional[str] = None,
+) -> List[str]:
+    if isinstance(value, str):
+        items = [item.strip().upper() for item in value.split(",")]
+    else:
+        items = []
+    normalized = [
+        item for item in items
+        if item and item not in {".", "..", "ALL"}
+    ]
+    if normalized:
+        return normalized
+
+    normalized_department = _normalize_department(fallback_department)
+    if visibility == "private" and normalized_department and normalized_department != "ALL":
+        return [normalized_department]
+    return []
+
+
 def _build_admin_document_payload(entry: dict) -> dict:
     raw_source_path = str(entry.get("source_path") or "").strip()
     source_path = Path(raw_source_path).expanduser() if raw_source_path else None
     exists = bool(source_path and source_path.exists() and source_path.is_file())
     stat = source_path.stat() if exists and source_path else None
-    status = "완료" if entry.get("status") == "ingested" else (entry.get("status") or "대기")
+    raw_status = str(entry.get("status") or "").strip().lower()
+    is_approved = raw_status == "approved"
+    if is_approved:
+        status = "승인 완료"
+        status_category = "approved"
+    elif raw_status in {"ingested", "pending"}:
+        status = "승인 대기"
+        status_category = "pending"
+    else:
+        status = entry.get("status") or "대기"
+        status_category = "pending"
+
+    visibility = _normalize_visibility(entry.get("visibility"), entry.get("department"))
+    visible_departments = _normalize_visible_departments(
+        entry.get("visible_departments"),
+        fallback_department=entry.get("department"),
+        visibility=visibility,
+    )
 
     return {
         "doc_id": entry.get("doc_id"),
@@ -137,15 +184,20 @@ def _build_admin_document_payload(entry: dict) -> dict:
         "uploaded_at": entry.get("uploaded_at") or entry.get("created_at"),
         "created_at": entry.get("created_at"),
         "updated_at": entry.get("updated_at"),
+        "approved_at": entry.get("approved_at"),
+        "approved_by": entry.get("approved_by"),
         "page_total": entry.get("page_total"),
         "chunk_count": entry.get("chunk_count", 0),
         "status": status,
+        "status_category": status_category,
         "status_raw": entry.get("status"),
         "owner_id": entry.get("owner_id"),
         "uploader_id": entry.get("uploader_id"),
         "department": _coerce_department(entry.get("department"), entry.get("owner_id")),
         "access_level": _coerce_access_level(entry.get("access_level")),
         "department_only": bool(entry.get("department_only")),
+        "visibility": visibility,
+        "visible_departments": visible_departments,
         "languages": entry.get("languages") or [],
         "extractors_used": entry.get("extractors_used") or [],
         "input_type": entry.get("input_type"),
@@ -498,6 +550,11 @@ MAX_MULTI_UPLOAD_FILES = 90
 async def upload_department_document(
     file: UploadFile = File(...),
     department: str = Form(...),
+    visibility: Optional[str] = Form(default=None),
+    access_level: Optional[str] = Form(default=None),
+    job_level: Optional[str] = Form(default=None),
+    department_only: bool = Form(default=False),
+    visible_departments: Optional[str] = Form(default=None),
     current_user: AuthUser = Depends(require_admin),
 ):
     normalized_department = _normalize_department(department)
@@ -519,6 +576,14 @@ async def upload_department_document(
     target_dir.mkdir(parents=True, exist_ok=True)
     save_path = target_dir / safe_filename
     normalized_admin_id = current_user.username
+    normalized_visibility = _normalize_visibility(visibility, normalized_department)
+    normalized_visible_departments = _normalize_visible_departments(
+        visible_departments,
+        fallback_department=normalized_department,
+        visibility=normalized_visibility,
+    )
+    normalized_access_level = _coerce_access_level(access_level or job_level)
+    normalized_department_only = bool(department_only or normalized_visibility == "private")
 
     try:
         with open(save_path, "wb") as f:
@@ -547,6 +612,10 @@ async def upload_department_document(
                 {
                     "department": normalized_department,
                     "uploader_id": normalized_admin_id,
+                    "visibility": normalized_visibility,
+                    "visible_departments": normalized_visible_departments,
+                    "access_level": normalized_access_level,
+                    "department_only": normalized_department_only,
                 },
             )
 
@@ -555,6 +624,10 @@ async def upload_department_document(
             "filename": safe_filename,
             "doc_id": result.get("doc_id"),
             "department": normalized_department,
+            "visibility": normalized_visibility,
+            "visible_departments": normalized_visible_departments,
+            "access_level": normalized_access_level,
+            "department_only": normalized_department_only,
             "chunks_stored": result.get("count", 0),
             "source_type": result.get("source_type"),
         }
@@ -749,7 +822,7 @@ def admin_documents(_: AuthUser = Depends(require_admin)):
             "summary": {
                 "indexing_status": "실행 중",
                 "total_documents": len(documents),
-                "pending_count": sum(1 for doc in documents if doc.get("status") not in {"완료", "ingested"}),
+                "pending_count": sum(1 for doc in documents if doc.get("status_category") != "approved"),
                 "queue_count": 0,
             },
             "filters": {
@@ -762,6 +835,57 @@ def admin_documents(_: AuthUser = Depends(require_admin)):
     except Exception as e:
         logger.exception("admin/documents failed")
         raise HTTPException(status_code=500, detail=f"admin/documents failed: {e}")
+
+
+@router.post("/admin/documents/approve")
+def approve_admin_documents(
+    payload: dict = Body(...),
+    current_user: AuthUser = Depends(require_admin),
+):
+    doc_ids = payload.get("doc_ids") if isinstance(payload, dict) else None
+    if not isinstance(doc_ids, list):
+        raise HTTPException(status_code=400, detail="'doc_ids' must be an array.")
+
+    normalized_doc_ids = [
+        str(doc_id).strip()
+        for doc_id in doc_ids
+        if str(doc_id).strip()
+    ]
+    if not normalized_doc_ids:
+        raise HTTPException(status_code=400, detail="승인할 문서를 하나 이상 선택해 주세요.")
+
+    approved_count = 0
+    missing_doc_ids = []
+
+    for doc_id in normalized_doc_ids:
+        updated = update_document(
+            doc_id,
+            {
+                "status": "approved",
+            },
+        )
+        if updated is None:
+            missing_doc_ids.append(doc_id)
+            continue
+        update_document(
+            doc_id,
+            {
+                "status": "approved",
+                "approved_at": updated.get("updated_at"),
+                "approved_by": current_user.username,
+            },
+        )
+        approved_count += 1
+
+    if approved_count == 0:
+        raise HTTPException(status_code=404, detail="선택한 문서를 찾지 못했습니다.")
+
+    return {
+        "approved_count": approved_count,
+        "approved_doc_ids": [doc_id for doc_id in normalized_doc_ids if doc_id not in set(missing_doc_ids)],
+        "missing_doc_ids": missing_doc_ids,
+        "approved_by": current_user.username,
+    }
 
 
 @router.get("/docs-list")
