@@ -799,22 +799,13 @@ def _apply_grounding_guard(
     has_verified_context: bool,
     high_risk_query: bool,
 ) -> str:
-    """Force conservative wording for risky factual answers without verified grounding."""
+    """Return an explicit unknown response for risky factual answers without verified grounding."""
     if has_verified_context or not high_risk_query or not answer:
         return answer
-    if _has_uncertainty_language(answer):
-        return answer
-
-    try:
-        rewritten = _rewrite_unverified_answer_conservatively(answer, user_message, model)
-        if rewritten:
-            logger.info("Applied grounding guard for unverified factual answer.")
-            return rewritten.strip()
-    except Exception as e:
-        logger.warning("Grounding guard rewrite failed: %s", e)
+    logger.info("Blocked unverified factual answer and returned unknown fallback.")
 
     if re.search(r"[가-힣]", user_message):
-        return "정확한 근거가 없어 단정해서 답하기 어렵습니다. 확인 가능한 자료나 웹 검색 결과가 있으면 더 정확히 답할 수 있습니다."
+        return "확인된 근거가 없어 모르겠습니다. 문서나 신뢰할 수 있는 출처가 있으면 그 기준으로 다시 답변드릴게요."
     return "I don't have verified evidence for that, so I can't answer confidently. If you provide a source or enable web search, I can answer more accurately."
 
 
