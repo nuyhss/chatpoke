@@ -1214,7 +1214,7 @@ def handle_chat(
 
     result = call_ollama(prompt, model=selected_model)
     raw_answer = get_response_text(result)
-    answer = _apply_language_guard(user_message, raw_answer, selected_model)
+    answer = raw_answer
     answer = _apply_grounding_guard(
         user_message,
         answer,
@@ -1222,7 +1222,9 @@ def handle_chat(
         has_verified_context=bool(doc_context or web_context),
         high_risk_query=high_risk_query,
     )
+    answer = _apply_language_guard(user_message, answer, selected_model)
     answer = _apply_repetition_guard(user_message, answer, selected_model)
+    answer = _apply_language_guard(user_message, answer, selected_model)
     answer = _strip_markdown_emphasis(answer)
     response_metadata = _build_response_metadata(
         **get_response_metadata(result),
