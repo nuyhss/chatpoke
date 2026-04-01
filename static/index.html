@@ -98,7 +98,6 @@
         .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         .chat-header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: var(--bg); flex-shrink: 0; }
         .chat-header h3 { font-size: 15px; font-weight: 700; color: var(--tp); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .model-chip { font-size: 11px; color: var(--ts); background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-family: monospace; }
         .hdr-btn { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg2); color: var(--ts); font-size: 12px; font-family: inherit; cursor: pointer; transition: all .2s; white-space: nowrap; }
         .hdr-btn:hover { border-color: var(--accent); color: var(--accent); }
         .chat-searchbar { display: none; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: #f8fafc; }
@@ -268,7 +267,6 @@
         <div class="chat-header">
             <span style="font-size:16px">💬</span>
             <h3 id="hdr-title">새 채팅</h3>
-            <span class="model-chip" id="model-chip">qwen2.5:7b</span>
             <button class="hdr-btn" type="button" onclick="openChatSearch()">🔎 검색</button>
             <button class="hdr-btn" onclick="openModal('sp-modal')">⚙️ 프롬프트</button>
         </div>
@@ -834,7 +832,6 @@
         try {
             const r = await fetch(API + '/health');
             const d = await r.json();
-            if (d.model) document.getElementById('model-chip').textContent = d.model;
         } catch {}
     }
 
