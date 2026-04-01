@@ -45,6 +45,9 @@
         .count-badge { display:inline-flex; min-width:34px; justify-content:center; align-items:center; padding:4px 10px; border-radius:999px; background:#eef2ff; color:#1d4ed8; font-weight:700; font-size:13px; }
         .main-stack { display:grid; gap:18px; }
         .upload-card { border:1px dashed #c7d2fe; border-radius:24px; background:linear-gradient(180deg,#fbfdff,#f8fbff); padding:20px; }
+        .upload-head { margin-bottom:16px; }
+        .upload-head h2 { margin:0; font-size:22px; }
+        .upload-head p { margin:6px 0 0; color:var(--muted); font-size:14px; line-height:1.6; }
         .upload-settings { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-bottom:18px; }
         .field { min-width:160px; flex:0 1 180px; }
         .field label { display:block; margin-bottom:8px; font-size:13px; color:var(--muted); font-weight:600; }
@@ -134,7 +137,7 @@
                 <div class="title-icon">🗂</div>
                 <div class="title-copy">
                     <h1>문서 관리</h1>
-                    <p>업로드 문서의 부서, 접근 권한, 상태를 한 번에 관리합니다.</p>
+                    <p>업로드 전 문서 권한과 부서 범위를 설정하고 상태를 한 번에 관리합니다.</p>
                 </div>
             </div>
             <div class="toolbar">
@@ -173,15 +176,19 @@
 
             <main class="main-stack">
                 <section class="upload-card">
+                    <div class="upload-head">
+                        <h2>권한 설정</h2>
+                        <p>문서를 업로드하기 전에 어떤 부서 문서로 분류할지 먼저 지정합니다.</p>
+                    </div>
                     <div class="upload-settings">
-                        <div class="field"><label for="department-input">업로드 대상 부서</label><select id="department-input"><option value="RD">RD</option><option value="MD">MD</option><option value="OD">OD</option></select></div>
-                        <label class="checkbox-row"><span>관리자가 선택한 부서 문서로 직원 답변 범위를 제한합니다.</span></label>
+                        <div class="field"><label for="department-input">권한 적용 부서</label><select id="department-input"><option value="RD">RD</option><option value="MD">MD</option><option value="OD">OD</option></select></div>
+                        <label class="checkbox-row"><span>선택한 부서 기준으로 문서 접근 범위와 직원 답변 범위를 제한합니다.</span></label>
                     </div>
                     <div class="dropzone" id="dropzone" tabindex="0">
                         <div>
                             <div class="file-icon">📄</div>
-                            <h3>파일을 드래그하거나 클릭해 업로드하세요</h3>
-                            <p>관리자 페이지에서 업로드된 문서는 표와 필터에 바로 반영됩니다.</p>
+                            <h3>권한을 설정한 뒤 파일을 업로드하세요</h3>
+                            <p>업로드된 문서는 선택한 부서 권한으로 저장되고 표와 필터에 바로 반영됩니다.</p>
                             <div class="support-note">현재 연결된 백엔드 지원 형식: PDF, PNG, JPG, JPEG, WEBP · 한 번에 최대 10개</div>
                         </div>
                     </div>
@@ -202,6 +209,7 @@
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             <button class="btn subtle" id="refresh-btn" type="button">새로고침</button>
                             <button class="btn danger" id="delete-selected-btn" type="button">선택 삭제</button>
+                            <button class="btn danger" id="reject-selected-btn" type="button">선택 반려</button>
                         </div>
                     </div>
                     <div class="table-wrap">
@@ -458,7 +466,7 @@
                         <td>${esc(formatDate(doc.uploaded_at || doc.updated_at))}</td>
                         <td><span class="access-badge">${esc(doc.department || "-")}</span></td>
                         <td><span class="status-badge ${statusClass}">${esc(statusLabel)}</span></td>
-                        <td><div class="row-actions"><button class="mini-btn doc-delete-btn" type="button" data-doc-index="${idx}">삭제</button></div></td>
+                        <td><div class="row-actions"><button class="mini-btn doc-delete-btn" type="button" data-doc-index="${idx}">삭제</button><button class="mini-btn doc-reject-btn" type="button" data-doc-index="${idx}">반려</button></div></td>
                     </tr>
                 `;
             }).join("");
@@ -478,6 +486,12 @@
                 button.addEventListener("click", () => {
                     const doc = docs[Number(button.dataset.docIndex)];
                     deleteOneDocument(doc.doc_id || "", doc.source || "", doc.source_type || "");
+                });
+            });
+            tbody.querySelectorAll(".doc-reject-btn").forEach(button => {
+                button.addEventListener("click", () => {
+                    const doc = docs[Number(button.dataset.docIndex)];
+                    rejectOneDocument(doc.doc_id || "", doc.source || "", doc.source_type || "");
                 });
             });
         }
@@ -589,6 +603,20 @@
             await loadDocuments();
         }
 
+        async function rejectOneDocument(docId, source, sourceType) {
+            const name = source || docId || "선택 문서";
+            if (!confirm(`"${name}" 문서를 반려(삭제)할까요?`)) return;
+            const response = await requestDeleteDocument(docId, source, sourceType);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                pushAlert("error", `${name} 반려 실패: ${data.detail || "오류가 발생했습니다."}`);
+                return;
+            }
+            selectedKeys.delete(docId ? `id:${docId}` : `src:${String(source || "").toLowerCase()}`);
+            pushAlert("success", `${name} 반려 완료`);
+            await loadDocuments();
+        }
+
         async function deleteSelectedDocuments() {
             const docs = filteredDocuments().filter(doc => selectedKeys.has(docKey(doc)));
             if (!docs.length) {
@@ -601,6 +629,23 @@
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok) pushAlert("error", `${doc.source} 삭제 실패: ${data.detail || "오류가 발생했습니다."}`);
                 else pushAlert("success", `${doc.source} 삭제 완료`);
+            }
+            selectedKeys.clear();
+            await loadDocuments();
+        }
+
+        async function rejectSelectedDocuments() {
+            const docs = filteredDocuments().filter(doc => selectedKeys.has(docKey(doc)));
+            if (!docs.length) {
+                pushAlert("warning", "선택된 문서가 없습니다.");
+                return;
+            }
+            if (!confirm(`선택한 ${docs.length}건의 문서를 반려(삭제)할까요?`)) return;
+            for (const doc of docs) {
+                const response = await requestDeleteDocument(doc.doc_id || "", doc.source || "", doc.source_type || "");
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) pushAlert("error", `${doc.source} 반려 실패: ${data.detail || "오류가 발생했습니다."}`);
+                else pushAlert("success", `${doc.source} 반려 완료`);
             }
             selectedKeys.clear();
             await loadDocuments();
@@ -744,6 +789,7 @@
             document.getElementById("logout-btn").addEventListener("click", logout);
             document.getElementById("refresh-btn").addEventListener("click", loadDocuments);
             document.getElementById("delete-selected-btn").addEventListener("click", deleteSelectedDocuments);
+            document.getElementById("reject-selected-btn").addEventListener("click", rejectSelectedDocuments);
             document.getElementById("manage-accounts-btn").addEventListener("click", () => { renderAccounts(); openModal("accounts-modal"); });
             document.getElementById("change-password-btn").addEventListener("click", () => openModal("password-modal"));
             document.getElementById("save-password-btn").addEventListener("click", savePassword);
