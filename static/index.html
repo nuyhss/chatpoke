@@ -100,6 +100,8 @@
         .chat-header h3 { font-size: 15px; font-weight: 700; color: var(--tp); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .hdr-btn { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg2); color: var(--ts); font-size: 12px; font-family: inherit; cursor: pointer; transition: all .2s; white-space: nowrap; }
         .hdr-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .hdr-toggle.on { border-color: rgba(37,99,235,.28); background: rgba(37,99,235,.08); color: var(--accent); font-weight: 600; }
+        .hdr-toggle.off { border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10); color: #b45309; font-weight: 600; }
         .chat-searchbar { display: none; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: #f8fafc; }
         .chat-searchbar.open { display: flex; }
         .chat-search-input { flex: 1; min-width: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--tp); font-size: 13px; font-family: inherit; outline: none; }
@@ -268,6 +270,7 @@
             <span style="font-size:16px">💬</span>
             <h3 id="hdr-title">새 채팅</h3>
             <button class="hdr-btn" type="button" onclick="openChatSearch()">🔎 검색</button>
+            <button class="hdr-btn hdr-toggle" id="web-search-toggle" type="button" onclick="toggleWebSearch()" aria-pressed="true">🌐 웹검색 ON</button>
             <button class="hdr-btn" onclick="openModal('sp-modal')">⚙️ 프롬프트</button>
         </div>
         <div class="chat-searchbar" id="chat-searchbar">
@@ -298,6 +301,7 @@
 
     const DOC_KEY_PREFIX = 'ai_uploaded_docs';
     const SYS_PROMPT_KEY_PREFIX = 'ai_sys_prompt';
+    const WEB_SEARCH_KEY_PREFIX = 'ai_web_search_enabled';
     const LOGIN_REDIRECT_KEY = 'tilon_login_redirect';
     const ADMIN_ROLES = new Set(['adminD', 'admin']);
     const MAX_SHELF_FILES = 90;
@@ -544,6 +548,31 @@
         return currentUser ? `${prefix}:${currentUser.id}` : prefix;
     }
 
+    function getWebSearchEnabled() {
+        const saved = localStorage.getItem(userScopedKey(WEB_SEARCH_KEY_PREFIX));
+        return saved === null ? true : saved === 'true';
+    }
+
+    function updateWebSearchToggleUI() {
+        const btn = document.getElementById('web-search-toggle');
+        if (!btn) return;
+        const enabled = getWebSearchEnabled();
+        btn.classList.toggle('on', enabled);
+        btn.classList.toggle('off', !enabled);
+        btn.textContent = enabled ? '🌐 웹검색 ON' : '📄 웹검색 OFF';
+        btn.title = enabled
+            ? '최신 정보가 필요하면 웹검색을 함께 사용합니다.'
+            : '웹검색 없이 문서/PDF 내용만 기준으로 답변합니다.';
+        btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    }
+
+    function toggleWebSearch() {
+        const next = !getWebSearchEnabled();
+        localStorage.setItem(userScopedKey(WEB_SEARCH_KEY_PREFIX), String(next));
+        updateWebSearchToggleUI();
+        toast(next ? '웹검색을 켰습니다.' : '웹검색을 껐습니다. 이제 문서/PDF 내용만 기준으로 답변합니다.');
+    }
+
     async function finishEmployeeLogin(user) {
         currentUser = {
             id: user.id || user.username,
@@ -563,6 +592,7 @@
         document.getElementById('u-role').textContent = u.department && u.department !== 'ALL' ? `${u.role} · ${u.department}` : u.role;
         document.getElementById('u-avatar').textContent = id[0].toUpperCase();
         refreshEmployeeAccessUI();
+        updateWebSearchToggleUI();
 
         if (chats.length === 0) newChat();
         else {
@@ -1356,7 +1386,7 @@
                 active_source: useUploadScope ? (chat.active_source || null) : null,
                 active_doc_id: useUploadScope ? (chat.active_doc_id || null) : null,
                 active_source_type: useUploadScope ? 'upload' : null,
-                web_search_enabled: true,
+                web_search_enabled: getWebSearchEnabled(),
                 // identity is resolved on the server session
                 user_role: undefined,
                 department: undefined
@@ -1483,6 +1513,7 @@
     document.getElementById('chat-search-prev').addEventListener('click', () => stepChatSearch(-1));
     document.getElementById('chat-search-next').addEventListener('click', () => stepChatSearch(1));
     document.getElementById('chat-search-close').addEventListener('click', () => closeChatSearch());
+    updateWebSearchToggleUI();
 
     renderShelfDocs();
 </script>

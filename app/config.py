@@ -96,6 +96,8 @@ WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "ko")
 
 # ── Web Search (NEW — original had mode but no actual search) ─────────
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+WEB_SEARCH_PROVIDER = os.getenv("WEB_SEARCH_PROVIDER", "duckduckgo").strip().lower()
+WEB_SEARCH_TIMEOUT = max(1, int(os.getenv("WEB_SEARCH_TIMEOUT", "10")))
 DUCKDUCKGO_MAX_RESULTS = max(1, int(os.getenv("DUCKDUCKGO_MAX_RESULTS", "5")))
 DUCKDUCKGO_REGION = os.getenv("DUCKDUCKGO_REGION", "kr-kr")
 

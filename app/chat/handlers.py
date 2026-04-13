@@ -3,7 +3,7 @@ Unified chat handler — works like a normal chatbot.
 
 NO hardcoded mode routing. Instead:
 1. Always search vectorstore for relevant document context
-2. If web search might help, search Tavily too
+2. If web search might help, search the configured web provider too
 3. Build one prompt with all available context
 4. LLM decides what to use
 
@@ -552,6 +552,7 @@ def _build_prompt(
     web_context: str = "",
     system_prompt: str = "",
     resolved_query: str = "",
+    document_only_mode: bool = False,
 ) -> str:
     """Build a single unified prompt with all available context."""
     parts = [f"[System]\n{system_prompt or _SYSTEM_PROMPT}"]
@@ -568,6 +569,15 @@ def _build_prompt(
             "[Grounding status]\n"
             "No verified document context and no verified web search context are available.\n"
             "Conservative mode is required: answer only if highly confident, otherwise say you do not know or need verification."
+        )
+
+    if document_only_mode:
+        parts.append(
+            "[Answering mode]\n"
+            "Document-only mode is enabled.\n"
+            "Answer only from the retrieved document context.\n"
+            "Do not use outside knowledge.\n"
+            "If the document context does not support the answer, say that the information is not in the document."
         )
 
     if doc_context:
@@ -809,6 +819,35 @@ def _apply_grounding_guard(
     return "I don't have verified evidence for that, so I can't answer confidently. If you provide a source or enable web search, I can answer more accurately."
 
 
+def _document_only_mode_answer(
+    user_message: str,
+    *,
+    active_source: Optional[str] = None,
+    active_doc_id: Optional[str] = None,
+    has_document_scope: bool = False,
+) -> str:
+    source_name = active_source or active_doc_id or "업로드한 문서"
+    if re.search(r"[가-힣]", user_message):
+        if has_document_scope:
+            return (
+                f"웹검색이 꺼져 있어서 문서 내용만 기준으로 답변합니다. "
+                f"현재 문서 '{source_name}' 안에서는 질문과 관련된 내용을 찾지 못했습니다."
+            )
+        return (
+            "웹검색이 꺼져 있어 업로드된 PDF/문서 내용만 기준으로 답변합니다. "
+            "관련 문서를 업로드하거나 문서 안의 내용으로 다시 질문해 주세요."
+        )
+    if has_document_scope:
+        return (
+            f"Web search is off, so I can answer only from the document. "
+            f"I couldn't find relevant information in '{source_name}'."
+        )
+    return (
+        "Web search is off, so I can answer only from uploaded documents. "
+        "Please upload a document or ask a question grounded in one."
+    )
+
+
 def _apply_language_guard(user_message: str, answer: str, model: str) -> str:
     """
     Hard guard:
@@ -984,7 +1023,7 @@ def handle_chat(
         active_doc_id: Stable document ID scope for the current chat, if any
         active_source_type: Source-type scope for the current chat (e.g., 'upload'), if any
         system_prompt: Override default system prompt
-        web_search_enabled: Enable/disable Tavily web search
+        web_search_enabled: Enable/disable web search
     """
     history = history or []
     selected_model = model or OLLAMA_MODEL
@@ -1177,6 +1216,46 @@ def handle_chat(
     else:
         logger.info("No relevant document chunks found")
 
+    document_only_mode = not web_search_enabled
+    document_only_threshold = _scoped_confidence_threshold(docs) if docs else DOCUMENT_CONFIDENCE_THRESHOLD
+    document_only_low_confidence = (not docs) or (
+        retrieval.confidence < document_only_threshold
+        and not retrieval.strong_keyword_hit
+    )
+    document_only_entity_mismatch = bool(
+        document_only_mode
+        and high_risk_query
+        and not retrieval.strong_keyword_hit
+    )
+
+    if document_only_mode and (not doc_context or document_only_low_confidence or document_only_entity_mismatch):
+        no_doc_answer = _document_only_mode_answer(
+            user_message,
+            active_source=scoped_source or active_source,
+            active_doc_id=scoped_doc_id or active_doc_id,
+            has_document_scope=has_any_scope,
+        )
+        logger.info(
+            "Document-only mode blocked answer (confidence=%.2f, threshold=%.2f, keyword_hit=%s, high_risk=%s)",
+            retrieval.confidence,
+            document_only_threshold,
+            retrieval.strong_keyword_hit,
+            high_risk_query,
+        )
+        return {
+            "answer": no_doc_answer,
+            "sources": [],
+            "mode": "document_qa",
+            "active_source": scoped_source or active_source,
+            "active_doc_id": scoped_doc_id or active_doc_id,
+            "conversation_state": derived_state,
+            "response_metadata": _build_response_metadata(
+                finish_reason="stop",
+                response_capture=no_doc_answer,
+                resolved_query=resolved_query,
+            ),
+        }
+
     # ── Step 2: Optional web search (toggle-controlled) ──
     web_context = ""
     allow_web_search = web_search_enabled and not (scoped_source or scoped_doc_id)
@@ -1201,6 +1280,7 @@ def handle_chat(
         web_context=web_context,
         system_prompt=system_prompt,
         resolved_query=resolved_query,
+        document_only_mode=document_only_mode,
     )
 
     result = call_ollama(prompt, model=selected_model)

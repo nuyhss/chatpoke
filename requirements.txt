@@ -39,9 +39,12 @@ langdetect>=1.0.9
 # ── Reranker (optional — install if RERANKER_ENABLED=true) ────────────
 # FlagEmbedding>=1.2.0
 
-# ── Web Search (optional — install if using Tavily) ──────────────────
+# ── Web Search ────────────────────────────────────────────────────────
+duckduckgo-search>=6.0.0
+# DuckDuckGo also has a built-in HTML fallback for environments where the
+# dedicated package path is unavailable.
+# Install Tavily only if you want that provider too.
 # tavily-python>=0.3.0
-# duckduckgo-search>=6.0.0
 
 # ── Fine-Tuning (Usama's workstream — install separately) ────────────
 # torch>=2.1.0

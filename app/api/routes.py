@@ -41,7 +41,7 @@ from app.models.schemas import (
 from app.core.llm import check_ollama_health
 from app.core.stt import transcribe_audio_bytes
 from app.core.vision import analyze_image_bytes
-from app.core.web_search import search_web
+from app.core.web_search import get_web_search_provider, search_web
 from app.core.document_registry import (
     clear_document_registry,
     get_document,
@@ -360,7 +360,7 @@ def health():
             "ocr_enabled": ENABLE_OCR,
             "vision_model": VISION_MODEL,
             "stt_model": WHISPER_MODEL,
-            "web_search_provider": "tavily_or_duckduckgo",
+            "web_search_provider": get_web_search_provider(),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Health check failed: {e}")
@@ -1196,12 +1196,13 @@ async def chat_audio(
 
 @router.post("/web-search")
 def web_search(req: WebSearchRequest):
-    """Structured web search endpoint with Tavily or DuckDuckGo fallback."""
+    """Structured web search endpoint with configurable provider selection."""
     try:
         results = search_web(
             req.query,
             max_results=req.max_results,
             region=req.region or DUCKDUCKGO_REGION,
+            provider=req.provider,
         )
         return {
             "query": req.query,
@@ -1209,6 +1210,7 @@ def web_search(req: WebSearchRequest):
             "options": {
                 "region": req.region,
                 "max_results": req.max_results,
+                "provider": req.provider or get_web_search_provider(),
             },
             "results": results,
         }

@@ -192,9 +192,53 @@ CHAT_UI_HTML = """
         .topbar-center{display:flex;align-items:center;gap:10px;min-width:0;flex:1;justify-content:center}
         .model-select{padding:6px 11px;border-radius:8px;border:1px solid var(--line-strong);background:#18283c;color:var(--text);font-size:.78rem;outline:none;cursor:pointer;max-width:100%}
         .theme-select{padding:5px 9px;border-radius:8px;border:1px solid var(--line-strong);background:#18283c;color:var(--text);font-size:.72rem;outline:none;cursor:pointer}
-        .control-stack{display:flex;flex-direction:column;gap:4px;align-items:stretch}
-        .web-toggle{display:flex;align-items:center;gap:7px;color:var(--text);font-size:.74rem;line-height:1.2;padding:4px 8px;border-radius:999px;border:1px solid var(--line-strong);background:rgba(26,163,154,.12);white-space:nowrap;user-select:none}
-        .web-toggle input{width:15px;height:15px;accent-color:var(--brand)}
+        .control-stack{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+        .web-toggle{
+            display:flex;
+            align-items:center;
+            gap:10px;
+            color:var(--text);
+            font-size:.74rem;
+            line-height:1.2;
+            padding:6px 10px;
+            border-radius:14px;
+            border:1px solid var(--line-strong);
+            background:rgba(26,163,154,.12);
+            white-space:nowrap;
+            user-select:none;
+            cursor:pointer;
+            transition:.16s ease;
+        }
+        .web-toggle:hover{border-color:var(--brand);background:rgba(26,163,154,.16)}
+        .web-toggle input{position:absolute;opacity:0;pointer-events:none}
+        .web-toggle.off{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.38)}
+        .toggle-switch{
+            position:relative;
+            width:38px;
+            height:22px;
+            border-radius:999px;
+            background:rgba(255,255,255,.16);
+            border:1px solid rgba(255,255,255,.15);
+            flex-shrink:0;
+            transition:.16s ease;
+        }
+        .toggle-switch::after{
+            content:'';
+            position:absolute;
+            top:2px;
+            left:2px;
+            width:16px;
+            height:16px;
+            border-radius:50%;
+            background:#e8fff9;
+            box-shadow:0 2px 8px rgba(0,0,0,.25);
+            transition:.16s ease;
+        }
+        .web-toggle.on .toggle-switch{background:linear-gradient(120deg,var(--brand),#1fbe9f)}
+        .web-toggle.on .toggle-switch::after{transform:translateX(16px);background:#03251f}
+        .toggle-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+        .toggle-title{font-size:.72rem;font-weight:700;color:#eef7ff}
+        .toggle-hint{font-size:.64rem;color:#8ea4bf}
 
         .model-select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(26,163,154,.2)}
         .theme-select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(26,163,154,.2)}
@@ -341,8 +385,13 @@ CHAT_UI_HTML = """
                         <option value="ocean">Ocean</option>
                         <option value="rose">Rose</option>
                     </select>
-                    <label class="web-toggle" for="webSearchToggle">
-                        <input type="checkbox" id="webSearchToggle" checked> Web Search ON/OFF
+                    <label class="web-toggle" id="webSearchToggleLabel" for="webSearchToggle">
+                        <input type="checkbox" id="webSearchToggle" checked>
+                        <span class="toggle-switch" aria-hidden="true"></span>
+                        <span class="toggle-copy">
+                            <span class="toggle-title" id="webSearchToggleTitle">웹검색 ON</span>
+                            <span class="toggle-hint" id="webSearchToggleHint">최신 정보와 웹 결과를 함께 사용</span>
+                        </span>
                     </label>
                 </div>
                 <button class="topbar-btn" onclick="toggleDrawer()">Docs</button>
@@ -416,6 +465,9 @@ const activeScopeName=document.getElementById('activeScopeName');
 const modelSelect=document.getElementById('modelSelect');
 const themeSelect=document.getElementById('themeSelect');
 const webSearchToggle=document.getElementById('webSearchToggle');
+const webSearchToggleLabel=document.getElementById('webSearchToggleLabel');
+const webSearchToggleTitle=document.getElementById('webSearchToggleTitle');
+const webSearchToggleHint=document.getElementById('webSearchToggleHint');
 const historyList=document.getElementById('historyList');
 const shelfList=document.getElementById('shelfList');
 const shelfFileInput=document.getElementById('shelfFileInput');
@@ -1066,11 +1118,33 @@ function initWebSearchToggle(){
     const saved=localStorage.getItem('tilon_web_search_enabled');
     const enabled=saved===null?true:saved==='true';
     webSearchToggle.checked=enabled;
+    updateWebSearchToggleUI();
+}
+
+function updateWebSearchToggleUI(){
+    if(!webSearchToggle)return;
+    const enabled=!!webSearchToggle.checked;
+    if(webSearchToggleLabel){
+        webSearchToggleLabel.classList.toggle('on',enabled);
+        webSearchToggleLabel.classList.toggle('off',!enabled);
+        webSearchToggleLabel.title=enabled
+            ? '웹검색 사용: 최신 정보와 외부 웹 결과를 함께 참고합니다.'
+            : 'PDF 전용 모드: 업로드된 문서 내용만 기준으로 답변합니다.';
+    }
+    if(webSearchToggleTitle){
+        webSearchToggleTitle.textContent=enabled?'웹검색 ON':'PDF 전용';
+    }
+    if(webSearchToggleHint){
+        webSearchToggleHint.textContent=enabled
+            ? '최신 정보와 웹 결과를 함께 사용'
+            : '웹검색 없이 업로드된 문서 내용만 답변';
+    }
 }
 
 if(webSearchToggle){
     webSearchToggle.addEventListener('change',()=>{
         localStorage.setItem('tilon_web_search_enabled',webSearchToggle.checked?'true':'false');
+        updateWebSearchToggleUI();
     });
 }
 
