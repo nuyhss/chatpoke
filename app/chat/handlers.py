@@ -58,10 +58,10 @@ _HISTORY_ROLES = {"system", "user", "assistant"}
 # Web Search (additive, not a separate mode)
 # ═══════════════════════════════════════════════════════════════════════
 
-def _search_web(query: str) -> str:
+def _search_web(query: str, provider: Optional[str] = None) -> str:
     """Search current information using the shared search helper."""
     try:
-        return format_search_results(search_web(query, max_results=3))
+        return format_search_results(search_web(query, max_results=3, provider=provider))
     except Exception as e:
         logger.debug("Web search failed: %s", e)
         return ""
@@ -1263,15 +1263,12 @@ def handle_chat(
         allow_web_search = False
 
     if allow_web_search:
-        if _might_need_web_search(resolved_query) or high_risk_query:
-            web_results = _search_web(resolved_query)
-            if web_results:
-                web_context = web_results
-                logger.info("Added web search results (toggle enabled)")
-            else:
-                logger.info("Web search requested but no results were returned.")
+        web_results = _search_web(resolved_query, provider="tavily")
+        if web_results:
+            web_context = web_results
+            logger.info("Added Tavily web search results (toggle enabled)")
         else:
-            logger.debug("Web search skipped by heuristic (query appears local/static).")
+            logger.info("Tavily web search was enabled but no results were returned.")
     # ── Step 3: Build prompt with all context and let LLM decide ──
     prompt = _build_prompt(
         user_message=user_message,

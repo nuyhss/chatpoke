@@ -52,7 +52,7 @@ def _provider_order(explicit_provider: Optional[str] = None) -> List[str]:
         provider = get_web_search_provider()
 
     if provider == "tavily":
-        return ["tavily", "duckduckgo"]
+        return ["tavily"]
     if provider == "auto":
         return ["tavily", "duckduckgo"] if TAVILY_API_KEY else ["duckduckgo", "tavily"]
     return ["duckduckgo", "tavily"]
