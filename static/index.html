@@ -8,11 +8,11 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
-            --bg: #f5f6f8; --bg2: #ffffff; --bg3: #f0f1f3; --bgh: #e8eaed;
-            --accent: #2563eb; --accent2: #3b82f6;
-            --tp: #1a1a2e; --ts: #64748b; --tm: #94a3b8; --border: #e2e8f0;
+            --bg: #f1f2f4; --bg2: #fcfcfd; --bg3: #eceef1; --bgh: #e2e5e9;
+            --accent: #60748a; --accent2: #73869b;
+            --tp: #1f2430; --ts: #667180; --tm: #8d98a6; --border: #d8dee5;
             --success: #10b981; --danger: #ef4444;
-            --user-bg: rgba(37,99,235,0.07); --user-border: #2563eb; --sw: 280px;
+            --user-bg: rgba(96,116,138,0.10); --user-border: #60748a; --sw: 280px;
         }
         body { font-family: 'Pretendard', -apple-system, sans-serif; background: var(--bg); color: var(--tp); height: 100vh; overflow: hidden; }
 
@@ -31,7 +31,7 @@
         .fg input:focus { border-color: var(--accent); }
         .login-type-row { display: flex; gap: 8px; margin-bottom: 16px; }
         .login-type-btn { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg3); color: var(--ts); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
-        .login-type-btn.active { background: rgba(37,99,235,.10); color: var(--accent); border-color: rgba(37,99,235,.35); }
+        .login-type-btn.active { background: rgba(96,116,138,.12); color: var(--accent); border-color: rgba(96,116,138,.32); }
         .login-btn { width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; margin-top: 8px; }
         .login-btn:hover { background: var(--accent2); }
         .login-err { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
@@ -83,7 +83,7 @@
         .shelf-del-btn { flex-shrink: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--tm); cursor: pointer; font-family: inherit; }
         .shelf-del-btn:hover { border-color: var(--danger); color: var(--danger); background: #fff5f5; }
         .shelf-item-meta { margin-top: 4px; font-size: 11px; color: var(--tm); }
-        .shelf-count { margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; color: var(--accent); background: rgba(37,99,235,0.10); border: 1px solid rgba(37,99,235,0.25); }
+        .shelf-count { margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; color: var(--accent); background: rgba(96,116,138,0.12); border: 1px solid rgba(96,116,138,0.24); }
 
         .quick-menu { margin-top: auto; }
         .sb-footer { padding: 12px; border-top: 1px solid var(--border); }
@@ -100,7 +100,7 @@
         .chat-header h3 { font-size: 15px; font-weight: 700; color: var(--tp); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .hdr-btn { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg2); color: var(--ts); font-size: 12px; font-family: inherit; cursor: pointer; transition: all .2s; white-space: nowrap; }
         .hdr-btn:hover { border-color: var(--accent); color: var(--accent); }
-        .hdr-toggle.on { border-color: rgba(37,99,235,.28); background: rgba(37,99,235,.08); color: var(--accent); font-weight: 600; }
+        .hdr-toggle.on { border-color: rgba(59,130,246,.34); background: rgba(59,130,246,.12); color: #2563eb; font-weight: 600; }
         .hdr-toggle.off { border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10); color: #b45309; font-weight: 600; }
         .chat-searchbar { display: none; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: #f8fafc; }
         .chat-searchbar.open { display: flex; }
@@ -1343,6 +1343,7 @@
         if (isEmployeeUser()) return false;
         if (!uploadedDocs.length) return false;
         if (isGeneralChatOverride(text)) return false;
+        if (getWebSearchEnabled() && !isDocumentIntent(text) && !isDocumentFollowup(text)) return false;
         if (isDocumentIntent(text)) return true;
         if (chat.active_source || chat.active_doc_id) return true;
         if (isDocumentFollowup(text)) return true;
@@ -1420,7 +1421,7 @@
                 if (useUploadScope) {
                     chat.active_source = d.active_source || chat.active_source || null;
                     chat.active_doc_id = d.active_doc_id || chat.active_doc_id || null;
-                    chat.active_source_type = chat.active_source_type || null;
+                    chat.active_source_type = d.active_source_type || chat.active_source_type || null;
                 } else {
                     chat.active_source = null;
                     chat.active_doc_id = null;

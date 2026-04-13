@@ -50,6 +50,8 @@ _HEADING_MAX_CHARS = 120
 _HEADING_MAX_LINES = 3
 _TABLE_LINE_BREAK_THRESHOLD = 3
 _MARKER_FALLBACK_RATIO = 1.75
+_NOISY_PUNCT_CLUSTER_RE = re.compile(r"(?:\s*[.,!?:;]){2,}\s*$")
+_PUNCT_ONLY_LINE_RE = re.compile(r"^[\s.,!?:;()\[\]{}'\"`~@#$%^&*+=_|\\/<>-]+$")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -255,12 +257,44 @@ def _normalize_extracted_text(text: str) -> str:
     if not text:
         return ""
 
+    def _clean_line(line: str) -> str:
+        stripped = re.sub(r"\s+", " ", line).strip()
+        if not stripped:
+            return ""
+
+        if _PUNCT_ONLY_LINE_RE.fullmatch(stripped):
+            return ""
+
+        meaningful_chars = len(re.findall(r"[A-Za-z0-9가-힣]", stripped))
+        punct_chars = len(re.findall(r"[.,!?:;]", stripped))
+        if meaningful_chars <= 1 and punct_chars >= max(2, len(stripped) // 2):
+            return ""
+
+        cluster_match = _NOISY_PUNCT_CLUSTER_RE.search(stripped)
+        if cluster_match:
+            cluster = cluster_match.group(0)
+            replacement = "?"
+            if "?" in cluster:
+                replacement = "?"
+            elif "!" in cluster:
+                replacement = "!"
+            elif ":" in cluster and "." not in cluster and "," not in cluster:
+                replacement = ":"
+            elif ";" in cluster and "." not in cluster and "," not in cluster:
+                replacement = ";"
+            else:
+                replacement = "."
+            stripped = stripped[:cluster_match.start()].rstrip() + replacement
+
+        stripped = re.sub(r"([,.;:!?])\1{1,}", r"\1", stripped)
+        return stripped.strip()
+
     lines = [line.rstrip() for line in text.splitlines()]
     normalized_lines = []
     blank_run = 0
 
     for line in lines:
-        stripped = re.sub(r"\s+", " ", line).strip()
+        stripped = _clean_line(line)
         if not stripped:
             blank_run += 1
             if blank_run <= 1:

@@ -133,7 +133,8 @@ def _is_document_intent_query(text: str) -> bool:
         "section", "paragraph", "table", "figure", "source", "quote", "lyrics",
     ]
     followup_hints = [
-        "그 부분", "위 내용", "방금 내용", "그거", "거기", "다시", "이어", "계속",
+        "그 부분", "위 내용", "방금 내용", "해당 내용", "그 문장", "이 문장",
+        "몇 페이지", "어느 페이지", "해당 페이지",
     ]
 
     if any(keyword in lower for keyword in indicators):
@@ -153,15 +154,15 @@ def _is_scope_followup_query(text: str) -> bool:
         return False
 
     hints = [
-        "그 부분", "그 내용", "위 내용", "방금", "앞에서", "이어서", "계속", "다시",
-        "그거", "거기", "그 다음", "다음 조항", "다음 항목", "해당 내용", "그 문장",
+        "그 부분", "그 내용", "위 내용", "방금 내용", "앞에서", "그 다음", "다음 조항",
+        "다음 항목", "해당 내용", "그 문장", "이 문장", "해당 페이지",
         "이 부분", "이 내용", "이 조항", "몇 페이지", "어느 페이지",
     ]
     if any(hint in lower for hint in hints):
         return True
 
-    # Short continuation-style queries are often follow-ups.
-    if len(lower) <= 40 and any(token in lower for token in ["다시", "이어", "계속", "그거", "거기", "해당"]):
+    # Very short follow-ups only count when they also mention document-like anchors.
+    if len(lower) <= 40 and any(token in lower for token in ["문서", "파일", "pdf", "페이지", "쪽", "본문", "문장", "표", "섹션"]):
         return True
 
     return False
@@ -631,6 +632,19 @@ def _build_prompt(
     parts.append(f"[User message]\n{user_message}")
 
     return "\n\n".join(parts)
+
+
+def _history_for_current_turn(
+    history: List[Message],
+    *,
+    web_search_enabled: bool,
+    document_intent: bool,
+    had_initial_scope: bool,
+) -> List[Message]:
+    """Drop stale document-thread history when the user pivots into a general web search."""
+    if web_search_enabled and not document_intent and had_initial_scope:
+        return []
+    return history or []
 
 
 def _contains_chinese_chars(text: str) -> bool:
@@ -1349,9 +1363,16 @@ def handle_chat(
         else:
             logger.info("Tavily web search was enabled but no results were returned.")
     # ── Step 3: Build prompt with all context and let LLM decide ──
+    prompt_history = _history_for_current_turn(
+        history,
+        web_search_enabled=web_search_enabled,
+        document_intent=document_intent,
+        had_initial_scope=has_initial_scope,
+    )
+
     prompt = _build_prompt(
         user_message=user_message,
-        history=history,
+        history=prompt_history,
         doc_context=doc_context,
         web_context=web_context,
         system_prompt=system_prompt,
