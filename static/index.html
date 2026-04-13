@@ -889,7 +889,7 @@
 
     function newChat() {
         const id = 'c_' + Date.now();
-        chats.unshift({ id, title: '새 채팅', active_source: null, active_doc_id: null, messages: [] });
+        chats.unshift({ id, title: '새 채팅', active_source: null, active_doc_id: null, active_source_type: null, messages: [] });
         saveChats();
         renderChatList();
         loadChat(id);
@@ -1031,6 +1031,7 @@
         map.set(key, {
             source: doc.source,
             doc_id: doc.doc_id || prev.doc_id || '',
+            source_type: doc.source_type || prev.source_type || null,
             chunks: Number(doc.chunks || prev.chunks || 0),
             uploaded_at: doc.uploaded_at || prev.uploaded_at || Date.now()
         });
@@ -1155,6 +1156,7 @@
                     grouped.set(key, {
                         source: d.source || '',
                         doc_id: d.doc_id || '',
+                        source_type: d.source_type || 'upload',
                         chunks: 0,
                         uploaded_at: Date.now()
                     });
@@ -1241,6 +1243,7 @@
                     const doc = {
                         source: data.filename || file.name,
                         doc_id: data.doc_id || '',
+                        source_type: data.source_type || 'upload',
                         chunks,
                         uploaded_at: Date.now()
                     };
@@ -1250,6 +1253,7 @@
                     if (activeChat) {
                         activeChat.active_source = doc.source || null;
                         activeChat.active_doc_id = doc.doc_id || null;
+                        activeChat.active_source_type = doc.source_type || null;
                         saveChats();
                     }
 
@@ -1385,7 +1389,7 @@
                 history: buildHistoryForAPI(chat.messages.slice(0, -1)),
                 active_source: useUploadScope ? (chat.active_source || null) : null,
                 active_doc_id: useUploadScope ? (chat.active_doc_id || null) : null,
-                active_source_type: useUploadScope ? 'upload' : null,
+                active_source_type: useUploadScope ? (chat.active_source_type || null) : null,
                 web_search_enabled: getWebSearchEnabled(),
                 // identity is resolved on the server session
                 user_role: undefined,
@@ -1416,9 +1420,11 @@
                 if (useUploadScope) {
                     chat.active_source = d.active_source || chat.active_source || null;
                     chat.active_doc_id = d.active_doc_id || chat.active_doc_id || null;
+                    chat.active_source_type = chat.active_source_type || null;
                 } else {
                     chat.active_source = null;
                     chat.active_doc_id = null;
+                    chat.active_source_type = null;
                 }
 
                 const hasScope = !!(chat.active_source || chat.active_doc_id);

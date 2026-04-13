@@ -21,7 +21,7 @@ from app.core.llm import call_ollama, get_response_metadata, get_response_text
 from app.core.web_search import format_search_results, search_web
 from app.retrieval.retriever import RetrievalResult, retrieve, format_context, extract_sources
 from app.core.vectorstore import get_documents_by_source, get_document_chunk_count
-from app.core.document_registry import list_documents
+from app.core.document_registry import get_document, list_documents
 from app.pipeline.parser import extract_full_text
 from app.config import (
     OLLAMA_MODEL,
@@ -332,6 +332,8 @@ def _list_uploaded_sources(owner_id: Optional[str] = None) -> List[str]:
         for doc in list_documents(owner_id=owner_id, source_type="upload"):
             if not doc or doc.get("source_type") != "upload":
                 continue
+            if str(doc.get("status") or "").strip().lower() != "approved":
+                continue
             source = str(doc.get("source") or "").strip()
             if not source:
                 continue
@@ -344,6 +346,43 @@ def _list_uploaded_sources(owner_id: Optional[str] = None) -> List[str]:
     except Exception as e:
         logger.debug("Failed to list uploaded sources: %s", e)
         return []
+
+
+def _get_scoped_registry_document(
+    active_source: Optional[str],
+    active_doc_id: Optional[str],
+    owner_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    if active_doc_id:
+        doc = get_document(active_doc_id)
+        if doc and (doc.get("source_type") != "upload" or not owner_id or doc.get("owner_id") == owner_id):
+            return doc
+
+    normalized_source = str(active_source or "").strip()
+    if not normalized_source:
+        return None
+
+    for doc in list_documents(owner_id=owner_id):
+        if str(doc.get("source") or "").strip() == normalized_source:
+            return doc
+    return None
+
+
+def _document_pending_approval_answer(
+    user_message: str,
+    active_source: Optional[str] = None,
+    active_doc_id: Optional[str] = None,
+) -> str:
+    source_name = active_source or active_doc_id or "업로드한 문서"
+    if re.search(r"[가-힣]", user_message):
+        return (
+            f"문서 '{source_name}'는 아직 승인 대기 중입니다. "
+            "승인 완료 후에만 PDF 내용을 읽고 답변할 수 있습니다."
+        )
+    return (
+        f"The document '{source_name}' is still pending approval. "
+        "I can read and answer from it only after approval is completed."
+    )
 
 
 def _infer_upload_source_from_query_or_history(user_message: str, history: List[Message], owner_id: Optional[str] = None) -> Optional[str]:
@@ -1058,6 +1097,36 @@ def handle_chat(
         inferred_source = _infer_upload_source_from_query_or_history(user_message, history, owner_id=user_id)
         if inferred_source:
             scoped_source = inferred_source
+
+    scoped_registry_doc = _get_scoped_registry_document(scoped_source, scoped_doc_id, owner_id=user_id)
+    if scoped_registry_doc and scoped_registry_doc.get("source_type"):
+        scoped_source_type = str(scoped_registry_doc.get("source_type") or "").strip() or scoped_source_type
+    if scoped_registry_doc and str(scoped_registry_doc.get("status") or "").strip().lower() != "approved":
+        pending_source = scoped_source or scoped_registry_doc.get("source")
+        pending_doc_id = scoped_doc_id or scoped_registry_doc.get("doc_id")
+        pending_answer = _document_pending_approval_answer(
+            user_message,
+            active_source=pending_source,
+            active_doc_id=pending_doc_id,
+        )
+        logger.info(
+            "Blocked access to unapproved document '%s' (%s).",
+            pending_source or "scoped document",
+            pending_doc_id or "no-doc-id",
+        )
+        return {
+            "answer": pending_answer,
+            "sources": [],
+            "mode": "document_pending_approval",
+            "active_source": pending_source,
+            "active_doc_id": pending_doc_id,
+            "conversation_state": derived_state,
+            "response_metadata": _build_response_metadata(
+                finish_reason="stop",
+                response_capture=pending_answer,
+                resolved_query=resolved_query,
+            ),
+        }
 
     if _is_direct_extraction_query(user_message) and not (scoped_source or scoped_doc_id) and scoped_source_type == "upload":
         upload_sources = _list_uploaded_sources(owner_id=user_id)

@@ -121,7 +121,6 @@ def upsert_document(
             "extractors_used": _summarize_extractors(page_docs),
             "languages": _summarize_languages(page_docs),
             "page_kind_counts": _page_kind_counts(page_docs),
-            "status": "ingested",
             "owner_id": owner_id if source_type == "upload" else None,
             "uploader_id": first_meta.get("uploader_id") or owner_id,
             "department": first_meta.get("department"),
@@ -129,13 +128,16 @@ def upsert_document(
         }
 
         if existing:
+            preserved_status = str(existing.get("status") or "").strip() or "pending"
             existing.update(entry)
             existing.setdefault("created_at", now)
             existing.setdefault("uploaded_at", now)
+            existing["status"] = preserved_status
             saved = existing
         else:
             saved = {
                 **entry,
+                "status": "pending",
                 "created_at": now,
                 "uploaded_at": now,
             }
@@ -155,6 +157,18 @@ def get_document(doc_id: str) -> Optional[Dict[str, Any]]:
     with _registry_lock:
         registry = _load_registry()
     return next((doc for doc in registry.get("documents", []) if doc.get("doc_id") == doc_id), None)
+
+
+def is_document_approved(doc_id: Optional[str]) -> bool:
+    """Return whether a registered document is approved for answering."""
+    if not doc_id:
+        return True
+
+    existing = get_document(str(doc_id))
+    if existing is None:
+        return True
+
+    return str(existing.get("status") or "").strip().lower() == "approved"
 
 
 def list_documents(owner_id: Optional[str] = None, source_type: Optional[str] = None) -> List[Dict[str, Any]]:

@@ -19,6 +19,7 @@ from app.config import (
     GLOBAL_MIN_RELEVANCE_SCORE,
     STRONG_KEYWORD_CONFIDENCE_FLOOR,
 )
+from app.core.document_registry import is_document_approved
 from app.core.vectorstore import (
     similarity_search_with_scores,
     get_documents_by_source,
@@ -69,6 +70,44 @@ def _scoped_query_tokens(query: str) -> set[str]:
     }
 
 
+def _is_approved_document(doc: Document, approval_cache: Dict[str, bool]) -> bool:
+    doc_id = str(doc.metadata.get("doc_id") or "").strip()
+    if not doc_id:
+        return True
+
+    cached = approval_cache.get(doc_id)
+    if cached is None:
+        cached = is_document_approved(doc_id)
+        approval_cache[doc_id] = cached
+    return cached
+
+
+def _filter_approved_documents(docs: List[Document], *, log_label: str) -> List[Document]:
+    approval_cache: Dict[str, bool] = {}
+    filtered = [doc for doc in docs if _is_approved_document(doc, approval_cache)]
+    blocked = len(docs) - len(filtered)
+    if blocked:
+        logger.info("Filtered out %d unapproved chunk(s) from %s.", blocked, log_label)
+    return filtered
+
+
+def _filter_approved_scored_results(
+    results: List[Tuple[Document, float]],
+    *,
+    log_label: str,
+) -> List[Tuple[Document, float]]:
+    approval_cache: Dict[str, bool] = {}
+    filtered = [
+        (doc, score)
+        for doc, score in results
+        if _is_approved_document(doc, approval_cache)
+    ]
+    blocked = len(results) - len(filtered)
+    if blocked:
+        logger.info("Filtered out %d unapproved retrieval hit(s) from %s.", blocked, log_label)
+    return filtered
+
+
 @dataclass
 class RetrievalResult:
     docs: List[Document]
@@ -100,6 +139,7 @@ def retrieve(
             owner_id=owner_id_filter,
             department=department_filter,
         )
+        docs = _filter_approved_documents(docs, log_label="full-document retrieval")
         logger.info(
             "Loaded %d chunks for whole-document task from '%s'%s",
             len(docs),
@@ -128,6 +168,7 @@ def retrieve(
         filter_department=department_filter,
         min_score=min_score,
     )
+    vector_results = _filter_approved_scored_results(vector_results, log_label="vector retrieval")
     keyword_results = search_keyword_index(
         query,
         k=fetch_k,
@@ -137,6 +178,7 @@ def retrieve(
         owner_id_filter=owner_id_filter,
         department_filter=department_filter,
     )
+    keyword_results = _filter_approved_scored_results(keyword_results, log_label="keyword retrieval")
 
     merged = _fuse_results(vector_results, keyword_results, limit=fetch_k)
     if source_filter or doc_id_filter:

@@ -80,6 +80,17 @@ def _normalize_user_id(user_id: Optional[str]) -> Optional[str]:
     return safe
 
 
+def _is_document_approved_status(doc_id: Optional[str]) -> bool:
+    if not doc_id:
+        return False
+
+    doc = get_document(doc_id)
+    if doc is None:
+        return False
+
+    return str(doc.get("status") or "").strip().lower() == "approved"
+
+
 def _ui_chats_state_path(user_id: Optional[str]) -> Path:
     normalized_user_id = _normalize_user_id(user_id)
     state_dir = DATA_DIR / "ui_state"
@@ -534,6 +545,22 @@ async def chat_with_file(
     # Step 3: Answer using the unified handler, scoped to this file
     selected_model = model or OLLAMA_MODEL
 
+    if not _is_document_approved_status(ingest_result.get("doc_id")):
+        pending_answer = (
+            f"파일 '{safe_filename}'은(는) 승인 대기 중입니다. "
+            "승인 완료 후에만 PDF 내용을 읽고 답변할 수 있습니다."
+        )
+        return {
+            "model": selected_model,
+            "answer": pending_answer,
+            "sources": [],
+            "mode": "document_pending_approval",
+            "active_source": safe_filename,
+            "active_doc_id": ingest_result.get("doc_id"),
+            "ingest": ingest_result,
+            "done": True,
+        }
+
     try:
         result = handle_chat(
             user_message=message,
@@ -690,6 +717,7 @@ async def upload_department_document(
             "department_only": normalized_department_only,
             "chunks_stored": result.get("count", 0),
             "source_type": result.get("source_type"),
+            "approval_status": "pending",
         }
     except HTTPException:
         raise
@@ -761,6 +789,7 @@ async def upload_file(
             "chunks_stored": result["count"],
             "doc_id": result.get("doc_id"),
             "source_type": result.get("source_type"),
+            "approval_status": "pending",
             "department": _coerce_department(department, normalized_user_id),
             "access_level": _coerce_access_level(access_level),
             "department_only": bool(department_only),
@@ -820,6 +849,7 @@ async def upload_multiple_files(
                 "message": result["message"],
                 "doc_id": result.get("doc_id"),
                 "source_type": result.get("source_type"),
+                "approval_status": "pending" if result.get("count", 0) > 0 else None,
                 "department": _coerce_department(department, normalized_user_id),
                 "access_level": _coerce_access_level(access_level),
                 "department_only": bool(department_only),
