@@ -19,7 +19,7 @@ from typing import List, Dict, Any, Optional
 from app.models.schemas import Message
 from app.core.llm import call_ollama, get_response_metadata, get_response_text
 from app.core.web_search import format_search_results, search_web
-from app.retrieval.retriever import retrieve, format_context, extract_sources
+from app.retrieval.retriever import RetrievalResult, retrieve, format_context, extract_sources
 from app.core.vectorstore import get_documents_by_source, get_document_chunk_count
 from app.core.document_registry import list_documents
 from app.pipeline.parser import extract_full_text
@@ -1043,7 +1043,6 @@ def handle_chat(
         or _is_direct_extraction_query(user_message)
         or _needs_full_document_context(user_message)
         or (has_initial_scope and _is_scope_followup_query(user_message))
-        or (has_initial_scope and not scope_reset_requested)
     )
 
     if scope_reset_requested:
@@ -1111,7 +1110,13 @@ def handle_chat(
                 ),
             }
 
-    # ── Step 1: Always search for relevant document context ──
+    prefer_web_over_documents = bool(
+        web_search_enabled
+        and not document_intent
+        and not (scoped_source or scoped_doc_id or scoped_source_type)
+    )
+
+    # ── Step 1: Retrieve relevant document context when appropriate ──
     doc_context = ""
     sources = []
 
@@ -1126,16 +1131,21 @@ def handle_chat(
     if normalized_role in {"user", "직원"} and normalized_department and not (scoped_source or scoped_doc_id or scoped_source_type == "upload"):
         department_scope = normalized_department
 
-    retrieval = retrieve(
-        resolved_query,
-        source_filter=scoped_source,
-        doc_id_filter=scoped_doc_id,
-        source_type_filter=scoped_source_type,
-        owner_id_filter=user_id,
-        department_filter=department_scope,
-        full_document=use_full_document,
-    )
-    docs = retrieval.docs
+    if prefer_web_over_documents:
+        retrieval = RetrievalResult(docs=[], confidence=0.0, strong_keyword_hit=False, used_full_document=False)
+        docs = []
+        logger.info("Skipped document retrieval because web search is enabled for a non-document query.")
+    else:
+        retrieval = retrieve(
+            resolved_query,
+            source_filter=scoped_source,
+            doc_id_filter=scoped_doc_id,
+            source_type_filter=scoped_source_type,
+            owner_id_filter=user_id,
+            department_filter=department_scope,
+            full_document=use_full_document,
+        )
+        docs = retrieval.docs
 
     has_explicit_scope = bool(scoped_source or scoped_doc_id)
     has_source_type_scope = bool(scoped_source_type)
