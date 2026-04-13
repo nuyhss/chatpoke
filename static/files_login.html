@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TilonAI 문서 포털 로그인</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #f4f6f8;
+            --surface: #ffffff;
+            --surface-soft: #f8fafc;
+            --line: #e2e8f0;
+            --text: #17212b;
+            --muted: #6b7280;
+            --primary: #1f2937;
+            --primary-strong: #111827;
+            --accent: #0f6b5b;
+            --danger: #b42318;
+            --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+        }
+        body {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            font-family: "IBM Plex Sans KR", sans-serif;
+            color: var(--text);
+            background:
+                linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+        .auth-card {
+            width: min(420px, 100%);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .auth-head {
+            padding: 24px 24px 18px;
+            border-bottom: 1px solid var(--line);
+            background: var(--surface);
+        }
+        .brand-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .brand-mark {
+            width: 44px;
+            height: auto;
+            flex-shrink: 0;
+        }
+        .brand-name {
+            font-size: 23px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+        }
+        .section-label {
+            margin-top: 16px;
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .auth-head h1 {
+            margin-top: 8px;
+            font-size: 30px;
+            line-height: 1.12;
+            letter-spacing: -0.05em;
+        }
+        .auth-head p {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+        .auth-body {
+            padding: 24px;
+        }
+        .fg + .fg {
+            margin-top: 16px;
+        }
+        .fg label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .fg input {
+            width: 100%;
+            min-height: 48px;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--surface-soft);
+            color: var(--text);
+            font: inherit;
+            outline: none;
+            transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+        }
+        .fg input:focus {
+            border-color: #cbd5e1;
+            box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.04);
+            background: #fff;
+        }
+        .action-row {
+            display: grid;
+            gap: 10px;
+            margin-top: 22px;
+        }
+        .login-btn,
+        .ghost-btn {
+            width: 100%;
+            min-height: 48px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background .16s ease, border-color .16s ease;
+        }
+        .login-btn {
+            border: 1px solid transparent;
+            background: var(--primary);
+            color: #fff;
+        }
+        .login-btn:hover {
+            background: var(--primary-strong);
+        }
+        .ghost-btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--text);
+        }
+        .ghost-btn:hover {
+            background: var(--surface-soft);
+        }
+        .login-err {
+            display: none;
+            margin-top: 12px;
+            color: var(--danger);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .foot-note {
+            margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid var(--line);
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.7;
+        }
+    </style>
+    <style>
+        .brand-row,
+        .brand-mark {
+            overflow: visible !important;
+        }
+        .brand-mark {
+            display: block !important;
+            width: 56px !important;
+            height: auto !important;
+            max-width: none !important;
+            max-height: none !important;
+            object-fit: contain !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            clip-path: none !important;
+        }
+    </style>
+    <style>
+        :root {
+            --corp-bg: #eff3f6;
+            --corp-surface: #ffffff;
+            --corp-line: #dce3ea;
+            --corp-line-strong: #c7d1dd;
+            --corp-text: #0f172a;
+            --corp-muted: #667085;
+            --corp-ink: #111827;
+            --corp-ink-strong: #0b1220;
+            --corp-accent-soft: #edf7f4;
+            --corp-shadow: 0 24px 56px rgba(15, 23, 42, 0.12);
+        }
+        body {
+            background:
+                radial-gradient(860px 420px at 8% 0%, rgba(15, 118, 110, 0.1), transparent 62%),
+                linear-gradient(180deg, #f7fafc 0%, var(--corp-bg) 100%);
+            color: var(--corp-text);
+        }
+        .auth-card {
+            width: min(468px, 100%);
+            border: 1px solid var(--corp-line);
+            border-radius: 28px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: var(--corp-shadow);
+        }
+        .auth-head {
+            padding: 32px 32px 22px;
+            border-bottom: 1px solid var(--corp-line);
+            background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+        }
+        .brand-name,
+        .auth-head h1 { color: #ffffff; }
+        .section-label {
+            color: rgba(255, 255, 255, 0.74);
+            letter-spacing: 0.12em;
+        }
+        .auth-head h1 {
+            margin-top: 14px;
+            font-size: 34px;
+            letter-spacing: -0.06em;
+        }
+        .auth-head p {
+            margin-top: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.8;
+        }
+        .auth-body { padding: 28px 32px 30px; }
+        .fg label,
+        .foot-note { color: var(--corp-muted); }
+        .fg input {
+            border: 1px solid var(--corp-line);
+            border-radius: 14px;
+            background: #ffffff;
+        }
+        .fg input:focus {
+            border-color: var(--corp-line-strong);
+            box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.04);
+        }
+        .login-btn,
+        .ghost-btn {
+            min-height: 52px;
+            border-radius: 14px;
+        }
+        .login-btn {
+            background: linear-gradient(135deg, var(--corp-ink), #1f2937);
+        }
+        .login-btn:hover {
+            background: linear-gradient(135deg, var(--corp-ink-strong), #18212f);
+        }
+        .ghost-btn {
+            border-color: var(--corp-line);
+            background: var(--corp-accent-soft);
+            color: var(--corp-text);
+        }
+        .ghost-btn:hover {
+            border-color: var(--corp-line-strong);
+            background: #f2f6fb;
+        }
+    </style>
+</head>
+<body>
+    <main class="auth-card">
+        <section class="auth-head">
+            <div class="brand-row">
+                <img class="brand-mark" src="/static/swf-logo.svg?v=2" alt="TilonAI 로고">
+                <div class="brand-name">TilonAI</div>
+            </div>
+            <div class="section-label">Document Portal</div>
+            <h1>문서 포털 로그인</h1>
+            <p>문서 등록 요청과 처리 현황 화면으로 이동합니다.</p>
+        </section>
+
+        <section class="auth-body">
+            <div class="fg">
+                <label for="li-id">아이디</label>
+                <input type="text" id="li-id" placeholder="아이디를 입력하세요" autocomplete="username">
+            </div>
+            <div class="fg">
+                <label for="li-pw">비밀번호</label>
+                <input type="password" id="li-pw" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
+            </div>
+
+            <div class="action-row">
+                <button class="login-btn" id="login-btn" type="button">로그인</button>
+                <button class="ghost-btn" type="button" onclick="window.location.href='/chat/login'">업무 챗봇으로 이동</button>
+            </div>
+
+            <div class="login-err" id="li-err">아이디 또는 비밀번호를 확인해 주세요.</div>
+            <div class="foot-note">권한에 따라 사용자 화면 또는 관리자 화면으로 자동 연결됩니다.</div>
+        </section>
+    </main>
+
+    <script>
+        const API = window.location.origin;
+        const FILES_USER_SESSION_TOKEN_KEY = "tilon_files_user_session_token";
+        const FILES_ADMIN_SESSION_TOKEN_KEY = "tilon_files_admin_session_token";
+
+        async function readJsonSafe(response) {
+            try {
+                return await response.json();
+            } catch {
+                return {};
+            }
+        }
+
+        function showLoginError(message) {
+            const errorEl = document.getElementById("li-err");
+            errorEl.textContent = message || "로그인에 실패했습니다.";
+            errorEl.style.display = "block";
+        }
+
+        async function doLogin() {
+            const id = document.getElementById("li-id").value.trim();
+            const pw = document.getElementById("li-pw").value;
+            const response = await fetch(API + "/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                    username: id,
+                    password: pw,
+                    login_type: "files"
+                })
+            });
+            const data = await readJsonSafe(response);
+            if (!response.ok) {
+                showLoginError(data.detail || "로그인에 실패했습니다.");
+                document.getElementById("li-pw").value = "";
+                return;
+            }
+            sessionStorage.removeItem(FILES_USER_SESSION_TOKEN_KEY);
+            sessionStorage.removeItem(FILES_ADMIN_SESSION_TOKEN_KEY);
+            const role = data.user?.role || "";
+            if (data.session_token) {
+                if (role === "adminD" || role === "admin") {
+                    sessionStorage.setItem(FILES_ADMIN_SESSION_TOKEN_KEY, data.session_token);
+                } else {
+                    sessionStorage.setItem(FILES_USER_SESSION_TOKEN_KEY, data.session_token);
+                }
+            }
+            const nextPath = role === "adminD" || role === "admin" ? "/files/admin" : "/files/user";
+            window.location.replace(nextPath);
+        }
+
+        document.getElementById("login-btn").addEventListener("click", doLogin);
+        document.getElementById("li-pw").addEventListener("keydown", event => {
+            if (event.key === "Enter") doLogin();
+        });
+    </script>
+</body>
+</html>
