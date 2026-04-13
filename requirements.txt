@@ -41,10 +41,10 @@ langdetect>=1.0.9
 
 # ── Web Search ────────────────────────────────────────────────────────
 duckduckgo-search>=6.0.0
+tavily-python>=0.3.0
 # DuckDuckGo also has a built-in HTML fallback for environments where the
 # dedicated package path is unavailable.
-# Install Tavily only if you want that provider too.
-# tavily-python>=0.3.0
+# Install Tavily if you want a more stable API-based provider.
 
 # ── Fine-Tuning (Usama's workstream — install separately) ────────────
 # torch>=2.1.0

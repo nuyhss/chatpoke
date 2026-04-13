@@ -12,6 +12,7 @@ HTML results page as a lightweight fallback.
 
 from __future__ import annotations
 
+import logging
 from html import unescape
 from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional
@@ -35,6 +36,7 @@ _DEFAULT_HEADERS = {
         "Chrome/124.0 Safari/537.36"
     ),
 }
+logger = logging.getLogger("tilon.web_search")
 
 
 def get_web_search_provider() -> str:
@@ -58,11 +60,15 @@ def _provider_order(explicit_provider: Optional[str] = None) -> List[str]:
 
 def _search_tavily(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
     if not TAVILY_API_KEY:
+        logger.info("Tavily search skipped: TAVILY_API_KEY is not configured.")
         return []
 
     try:
         from tavily import TavilyClient
-
+    except ImportError:
+        logger.warning("Tavily search requested but tavily-python is not installed.")
+        return []
+    try:
         client = TavilyClient(api_key=TAVILY_API_KEY)
         response = client.search(query, max_results=max_results)
         return [
@@ -75,7 +81,8 @@ def _search_tavily(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
             for item in response.get("results", [])
             if item.get("url")
         ]
-    except Exception:
+    except Exception as e:
+        logger.warning("Tavily search failed: %s", e)
         return []
 
 
